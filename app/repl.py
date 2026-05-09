@@ -7,8 +7,8 @@ from pydantic import ValidationError
 
 from app.ai_client import AIClient, AIClientError
 from app.config import AISettings
-from app.models import TextRequest
-from app.prompts import build_agent_prompt, build_task_prompt
+from app.models import AgentChatRequest, AgentMessage, TaskResponse, TextRequest
+from app.services import run_agent, run_style, run_syntax, run_word_choice
 
 
 HELP = """
@@ -123,13 +123,12 @@ async def _run_command(command: str, client: AIClient) -> None:
         request = _read_text_request()
         if command == "style":
             request.style = input("Target style: ").strip() or "polished"
-            prompt_name = "style"
+            response = await run_style(client, request)
         elif command == "word":
-            prompt_name = "word_choice"
+            response = await run_word_choice(client, request)
         else:
-            prompt_name = "syntax"
+            response = await run_syntax(client, request)
 
-        response = await client.complete_task(build_task_prompt(prompt_name, request))
         _print_response(response)
     except (AIClientError, ValidationError, FileNotFoundError) as exc:
         print(f"Error: {exc}")
@@ -137,20 +136,28 @@ async def _run_command(command: str, client: AIClient) -> None:
 
 async def _run_agent(client: AIClient) -> None:
     print("Agent mode. Type /exit to leave. Type /text to attach selected text.")
-    request: TextRequest | None = None
+    selection: TextRequest | None = None
+    history: list[AgentMessage] = []
     while True:
         message = input("\nagent> ").strip()
         if message in {"/exit", "/quit"}:
             return
         if message == "/text":
-            request = _read_text_request()
+            selection = _read_text_request()
             print("Attached selected text for later agent turns.")
             continue
         if not message:
             continue
         try:
-            response = await client.complete_task(build_agent_prompt(message, request))
+            request = AgentChatRequest(
+                message=message,
+                selection=selection,
+                history=history,
+            )
+            response = await run_agent(client, request)
             _print_response(response)
+            history.append(AgentMessage(role="user", content=message))
+            history.append(AgentMessage(role="assistant", content=response.reply))
         except (AIClientError, ValidationError, FileNotFoundError) as exc:
             print(f"Error: {exc}")
 
@@ -174,7 +181,7 @@ def _read_text_request() -> TextRequest:
     )
 
 
-def _print_response(response) -> None:
+def _print_response(response: TaskResponse) -> None:
     print("\n--- Reply ---")
     print(response.reply)
     if response.summary:

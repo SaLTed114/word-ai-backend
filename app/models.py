@@ -46,3 +46,8 @@ class AgentMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
 
+
+class AgentChatRequest(BaseModel):
+    message: str
+    selection: TextRequest | None = None
+    history: list[AgentMessage] = Field(default_factory=list)

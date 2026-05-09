@@ -2,7 +2,7 @@
 
 A clean backend prototype for a Word/WPS AI writing assistant.
 
-This repository currently focuses on backend capability validation through a REPL before rebuilding the UI or Office/WPS integration.
+This repository currently focuses on backend capability validation through a REPL and a small HTTP API before rebuilding the UI or Office/WPS integration.
 
 ## Documentation
 
@@ -15,6 +15,7 @@ This repository currently focuses on backend capability validation through a REP
 - Word choice checking
 - Style rewriting
 - Agent-style iterative writing assistance
+- FastAPI HTTP endpoints for backend tasks
 - External prompt templates
 - ShanghaiTech GenAI gateway direct endpoint support
 
@@ -44,7 +45,19 @@ OPENAI_USE_JSON_MODE=true
 python -m app.repl
 ```
 
-4. Try a command:
+4. Or run the HTTP API:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+5. Try a REPL command:
 
 ```text
 word-ai> syntax
@@ -62,6 +75,37 @@ EOF
 - `agent`: Start an iterative writing-assistant chat
 - `help`: Show available commands
 - `exit`: Quit
+
+## HTTP API
+
+- `GET /health`: Check service and AI configuration status
+- `POST /tasks/syntax`: Check grammar, spelling, punctuation, and clarity
+- `POST /tasks/word-choice`: Check word choice and phrasing
+- `POST /tasks/style`: Rewrite text into a target style
+- `POST /agent/chat`: Chat with the writing assistant using optional selected text and history
+
+Example request for `POST /tasks/syntax`:
+
+```json
+{
+  "text": "He dont know what to did yesterday.",
+  "context": {
+    "before": "",
+    "after": ""
+  },
+  "instruction": ""
+}
+```
+
+## Architecture
+
+Both the REPL and HTTP API call the same service layer:
+
+```text
+REPL / HTTP API -> app.services -> app.ai_client -> model gateway
+```
+
+The agent mode is currently a lightweight multi-turn writing assistant. It can use selected text, optional context, and conversation history, then return both a user-facing reply and structured edit actions.
 
 ## Security
 

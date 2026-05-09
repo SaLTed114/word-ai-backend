@@ -2,7 +2,7 @@
 
 这是一个面向 Word/WPS AI 写作助手的干净后端原型。
 
-当前仓库优先通过 REPL 验证后端能力，暂时不绑定具体前端、Word 插件或 WPS 插件壳子。
+当前仓库优先通过 REPL 和一个轻量 HTTP API 验证后端能力，暂时不绑定具体前端、Word 插件或 WPS 插件壳子。
 
 ## 文档
 
@@ -15,6 +15,7 @@
 - 用词检查
 - 文风改写
 - Agent 式多轮写作辅助
+- FastAPI HTTP 接口
 - 外置 prompt 模板
 - 支持上海科技大学 GenAI 网关 direct endpoint 调用方式
 
@@ -44,7 +45,19 @@ OPENAI_USE_JSON_MODE=true
 python -m app.repl
 ```
 
-4. 试用一个命令：
+4. 或者启动 HTTP API：
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+5. 试用一个 REPL 命令：
 
 ```text
 word-ai> syntax
@@ -62,6 +75,37 @@ EOF
 - `agent`：进入多轮写作助手模式
 - `help`：显示帮助
 - `exit`：退出
+
+## HTTP API
+
+- `GET /health`：检查服务状态和 AI 配置状态
+- `POST /tasks/syntax`：检查语法、拼写、标点和表达清晰度
+- `POST /tasks/word-choice`：检查用词和短语表达
+- `POST /tasks/style`：将文本改写为目标文风
+- `POST /agent/chat`：基于可选选中文本和历史记录进行写作助手对话
+
+`POST /tasks/syntax` 请求示例：
+
+```json
+{
+  "text": "He dont know what to did yesterday.",
+  "context": {
+    "before": "",
+    "after": ""
+  },
+  "instruction": ""
+}
+```
+
+## 架构说明
+
+REPL 和 HTTP API 共用同一层服务函数：
+
+```text
+REPL / HTTP API -> app.services -> app.ai_client -> 模型网关
+```
+
+当前 agent 模式是一个轻量多轮写作助手。它可以使用选中文本、可选上下文和对话历史，并返回用户可读回复以及结构化修改动作。
 
 ## 安全提醒
 
