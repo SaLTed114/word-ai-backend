@@ -16,18 +16,28 @@ This repository currently focuses on backend capability validation through a REP
 - Style rewriting
 - Agent-style iterative writing assistance
 - FastAPI HTTP endpoints for backend tasks
+- Static TXT editor demo that calls the backend API
 - External prompt templates
 - ShanghaiTech GenAI gateway direct endpoint support
 
 ## Quick Start
 
-1. Install dependencies:
+1. Create and activate the recommended conda environment:
+
+```powershell
+conda create -n wordplugin python=3.11
+conda activate wordplugin
+```
+
+The double-click batch launcher expects this environment name by default. If you use a different name, edit `CONDA_ENV` in `scripts/start_demo.bat`.
+
+2. Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-2. Create `.env` from `.env.example` and fill in your own API configuration:
+3. Create `.env` from `.env.example` and fill in your own API configuration:
 
 ```env
 OPENAI_API_KEY=
@@ -39,13 +49,13 @@ OPENAI_TRUST_ENV=false
 OPENAI_USE_JSON_MODE=true
 ```
 
-3. Run the REPL:
+4. Run the REPL:
 
 ```powershell
 python -m app.repl
 ```
 
-4. Or run the HTTP API:
+5. Or run the HTTP API:
 
 ```powershell
 uvicorn app.main:app --reload
@@ -57,7 +67,15 @@ Then open:
 http://127.0.0.1:8000/docs
 ```
 
-5. Try a REPL command:
+6. Or open the static text editor demo:
+
+```text
+examples/simple-web/index.html
+```
+
+The demo needs the HTTP API running at `http://127.0.0.1:8000`.
+
+7. Try a REPL command:
 
 ```text
 word-ai> syntax
@@ -106,6 +124,47 @@ REPL / HTTP API -> app.services -> app.ai_client -> model gateway
 ```
 
 The agent mode is currently a lightweight multi-turn writing assistant. It can use selected text, optional context, and conversation history, then return both a user-facing reply and structured edit actions.
+
+## Static Web Demo
+
+The static demo in `examples/simple-web/` is a small TXT editor. It can:
+
+- Open and save `.txt` content
+- Send the full text or current selection to backend tasks
+- Run syntax, word choice, style, and agent requests
+- Show `reply`, `final_text`, and structured `actions`
+- Apply returned text back to the editor
+
+It is intentionally framework-free so the data flow stays easy to inspect before moving to Word/WPS integration.
+
+You can launch the API server, API docs, and static editor demo with:
+
+```powershell
+.\scripts\start_demo.ps1
+```
+
+On Windows, you can also double-click:
+
+```text
+scripts/start_demo.bat
+```
+
+The batch wrapper activates the `wordplugin` conda environment before running the PowerShell launcher. Edit `CONDA_ENV` inside the file if your environment has a different name.
+
+Recommended first-time setup for the batch launcher:
+
+```powershell
+conda create -n wordplugin python=3.11
+conda activate wordplugin
+pip install -r requirements.txt
+```
+
+If PowerShell blocks the script, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\start_demo.ps1
+```
 
 ## Security
 

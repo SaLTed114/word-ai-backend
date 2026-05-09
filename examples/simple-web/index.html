@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Word AI Text Editor Demo</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Word AI Text Editor</h1>
+        <p>Plain text editor connected to the local backend API.</p>
+      </div>
+      <div class="connection">
+        <label for="apiBase">API</label>
+        <input id="apiBase" type="url" value="http://127.0.0.1:8000" spellcheck="false">
+        <button id="healthButton" type="button">Check</button>
+        <span id="healthStatus" class="status-dot" title="API status"></span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="editor-pane" aria-label="Text editor">
+        <div class="toolbar">
+          <input id="fileInput" type="file" accept=".txt,text/plain" hidden>
+          <button id="openButton" type="button">Open TXT</button>
+          <button id="saveButton" type="button">Save TXT</button>
+          <button id="clearButton" type="button">Clear</button>
+          <span id="selectionStatus" class="selection-status">Using full text</span>
+          <span id="editorStats" class="editor-stats">0 chars</span>
+        </div>
+        <textarea id="editor" spellcheck="true" placeholder="Type or open a .txt file. Select part of the text to edit only that selection. If nothing is selected, the whole editor text is sent."></textarea>
+      </section>
+
+      <aside class="assistant-pane" aria-label="AI assistant">
+        <section class="panel context-panel">
+          <h2>Context</h2>
+          <dl class="context-summary">
+            <div>
+              <dt>Scope</dt>
+              <dd id="scopeLabel">Full text</dd>
+            </div>
+            <div>
+              <dt>Range</dt>
+              <dd id="rangeLabel">0-0</dd>
+            </div>
+          </dl>
+          <label for="selectedPreview">Selected text</label>
+          <pre id="selectedPreview" class="context-preview"></pre>
+          <label for="beforePreview">Before context</label>
+          <pre id="beforePreview" class="context-preview"></pre>
+          <label for="afterPreview">After context</label>
+          <pre id="afterPreview" class="context-preview"></pre>
+        </section>
+
+        <section class="panel">
+          <h2>Tasks</h2>
+          <div class="task-grid">
+            <button id="syntaxButton" type="button">Syntax</button>
+            <button id="wordButton" type="button">Word Choice</button>
+          </div>
+          <div class="style-row">
+            <label for="styleInput">Style</label>
+            <input id="styleInput" type="text" value="academic" spellcheck="false">
+            <button id="styleButton" type="button">Rewrite</button>
+          </div>
+          <label for="instructionInput">Instruction</label>
+          <textarea id="instructionInput" class="small-textarea" placeholder="Optional instruction for the next task."></textarea>
+        </section>
+
+        <section class="panel">
+          <h2>Agent</h2>
+          <div id="chatLog" class="chat-log" aria-live="polite"></div>
+          <textarea id="agentInput" class="small-textarea" placeholder="Ask about the current text or selection."></textarea>
+          <div class="task-grid">
+            <button id="agentButton" type="button">Send</button>
+            <button id="resetAgentButton" type="button">Reset Chat</button>
+          </div>
+        </section>
+
+        <section class="panel result-panel">
+          <h2>Result</h2>
+          <div id="loading" class="loading" hidden>Processing...</div>
+          <div id="errorBox" class="error-box" hidden></div>
+          <div id="replyBox" class="reply-box"></div>
+          <pre id="finalTextBox" class="final-text"></pre>
+          <div id="actionsBox" class="actions"></div>
+          <button id="applyButton" type="button" disabled>Apply Result</button>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

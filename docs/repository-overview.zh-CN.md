@@ -19,6 +19,7 @@
 - 将 prompt 从代码中拆出到 `prompts/`
 - 使用统一的 `TaskResponse` 返回结构化结果
 - 将业务逻辑抽到 `app/services.py`，供 REPL 和 HTTP API 共用
+- 提供无框架静态 TXT 编辑器 demo，用于验证前后端数据流
 
 暂未完成：
 
@@ -46,9 +47,16 @@ word-ai-backend/
 │  ├─ style.md
 │  ├─ syntax.md
 │  └─ word_choice.md
+├─ scripts/
+│  └─ start_demo.ps1
 ├─ legacy/
 │  └─ old_backend/
 ├─ docs/
+├─ examples/
+│  └─ simple-web/
+│     ├─ app.js
+│     ├─ index.html
+│     └─ style.css
 ├─ .env.example
 ├─ .gitignore
 ├─ README.md
@@ -178,6 +186,56 @@ http://127.0.0.1:8000/docs
 
 存放旧项目后端代码，仅作为参考。新开发不应从 `legacy/` 中导入模块。
 
+### `examples/simple-web/`
+
+一个不依赖 Node.js 或前端框架的静态网页 demo。它模拟未来 Word/WPS 插件的核心数据流：
+
+```text
+编辑器文本或选区 -> fetch 调用 HTTP API -> 展示 TaskResponse -> 应用 final_text/action
+```
+
+当前能力：
+
+- 作为 TXT 文本编辑器使用
+- 打开和保存 `.txt`
+- 根据选区或全文调用后端
+- 调用 `syntax`、`word-choice`、`style`、`agent`
+- 将 `final_text` 或 `replace_selection` 应用回文本框
+
+这个 demo 的目的不是最终 UI，而是让前后端交互链路可视化。未来接入 Word/WPS 时，可以把 textarea 的读取和写回替换成文档 API，HTTP 调用逻辑保持基本不变。
+
+### `scripts/start_demo.ps1` 与 `scripts/start_demo.bat`
+
+`start_demo.ps1` 是 Windows PowerShell 一键启动脚本。它会：
+
+- 检查当前 Python 环境是否安装了必要依赖
+- 提醒 `.env` 是否存在
+- 在新的 PowerShell 窗口中启动 `uvicorn app.main:app --reload`
+- 打开 FastAPI 文档页 `http://127.0.0.1:8000/docs`
+- 打开静态 TXT 编辑器 demo
+
+`start_demo.bat` 是给双击启动准备的包装器。它会先尝试激活 `wordplugin` conda 环境，再调用 `start_demo.ps1`。如果环境名不同，可以修改 bat 文件中的 `CONDA_ENV`。
+
+它不负责安装依赖，也不会写入 API key。推荐首次使用前创建独立 conda 环境：
+
+```powershell
+conda create -n wordplugin python=3.11
+conda activate wordplugin
+pip install -r requirements.txt
+```
+
+如果使用其他环境名，需要同步修改 `scripts/start_demo.bat`：
+
+```bat
+set "CONDA_ENV=wordplugin"
+```
+
+若不使用 bat，也可以在已经激活的环境中手动启动：
+
+```powershell
+uvicorn app.main:app --reload
+```
+
 ## Agent 模式说明
 
 当前 agent 模式是“带选区上下文的轻量多轮写作助手”，不是完整工具调用型 agent。
@@ -223,6 +281,7 @@ agent 返回统一的 `TaskResponse`：
 
 后端稳定后，可以选择不同壳子：
 
+- 当前静态 TXT 编辑器 demo
 - 普通 Web 前端
 - Microsoft Word Office Add-in
 - WPS 插件机制
