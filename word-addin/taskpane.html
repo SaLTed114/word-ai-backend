@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Word AI Assistant</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="./taskpane.css">
+</head>
+<body>
+  <main class="pane">
+    <header class="header">
+      <div>
+        <h1>Word AI Assistant</h1>
+        <p id="hostStatus">Connecting to Word...</p>
+      </div>
+      <span id="healthStatus" class="status-dot" title="Backend status"></span>
+    </header>
+
+    <section class="section">
+      <label for="apiBase">Backend API</label>
+      <div class="api-row">
+        <input id="apiBase" type="url" value="http://127.0.0.1:8000" spellcheck="false">
+        <button id="healthButton" type="button">Check</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="selection-bar">
+        <strong id="scopeLabel">No text loaded</strong>
+        <button id="refreshButton" type="button">Refresh</button>
+      </div>
+      <pre id="selectedPreview" class="preview">(Select text in Word, or use the full document.)</pre>
+    </section>
+
+    <section class="section">
+      <label for="instructionInput">Instruction</label>
+      <textarea id="instructionInput" rows="3" placeholder="Optional instruction for the next task."></textarea>
+
+      <div class="button-grid">
+        <button id="syntaxButton" type="button">Syntax</button>
+        <button id="wordButton" type="button">Word Choice</button>
+      </div>
+
+      <label for="styleInput">Style</label>
+      <div class="api-row">
+        <input id="styleInput" type="text" value="academic" spellcheck="false">
+        <button id="styleButton" type="button">Rewrite</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <label for="agentInput">Agent</label>
+      <div id="chatLog" class="chat-log" aria-live="polite"></div>
+      <textarea id="agentInput" rows="3" placeholder="Ask about the current text or selection."></textarea>
+      <div class="button-grid">
+        <button id="agentButton" type="button">Send</button>
+        <button id="resetAgentButton" type="button">Reset</button>
+      </div>
+    </section>
+
+    <section class="section result-section">
+      <div id="loading" class="loading" hidden>Processing...</div>
+      <div id="errorBox" class="error-box" hidden></div>
+      <div id="replyBox" class="reply-box"></div>
+      <pre id="finalTextBox" class="final-text"></pre>
+      <div id="actionsBox" class="actions"></div>
+      <button id="applyButton" class="primary-button" type="button" disabled>Apply to Word</button>
+    </section>
+  </main>
+
+  <script src="./taskpane.js"></script>
+</body>
+</html>

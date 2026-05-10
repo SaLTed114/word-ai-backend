@@ -1,0 +1,269 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-muted: #eef3f7;
+  --border: #cfd8e3;
+  --text: #1f2933;
+  --muted: #5f6f7f;
+  --accent: #126c78;
+  --accent-dark: #0a4d57;
+  --danger: #b42318;
+  --danger-bg: #fff1f0;
+  --success: #287a45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  outline: none;
+}
+
+input {
+  height: 34px;
+  padding: 0 9px;
+}
+
+textarea {
+  min-height: 72px;
+  padding: 9px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(18, 108, 120, 0.12);
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pane {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 2px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #98a5b3;
+}
+
+.status-dot.ok {
+  background: var(--success);
+}
+
+.status-dot.error {
+  background: var(--danger);
+}
+
+.section {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.api-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.selection-bar strong {
+  font-size: 13px;
+}
+
+.preview,
+.final-text {
+  overflow: auto;
+  margin: 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fbfcfd;
+  color: var(--text);
+  white-space: pre-wrap;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.preview {
+  max-height: 130px;
+}
+
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.chat-log {
+  min-height: 76px;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px;
+  margin-bottom: 8px;
+  background: #fbfcfd;
+}
+
+.chat-message {
+  margin-bottom: 9px;
+  line-height: 1.4;
+}
+
+.chat-message strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--accent-dark);
+  font-size: 12px;
+}
+
+.loading {
+  padding: 9px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.error-box {
+  padding: 9px;
+  border: 1px solid #ffb4ad;
+  border-radius: 6px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.reply-box {
+  margin-bottom: 8px;
+  line-height: 1.45;
+}
+
+.final-text {
+  max-height: 180px;
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.action-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px;
+  background: #fbfcfd;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.action-item b {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.action-item p {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.primary-button {
+  width: 100%;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
