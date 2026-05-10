@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Word AI Settings</title>
+  <link rel="stylesheet" href="./settings.css">
+</head>
+<body>
+  <main class="settings-shell">
+    <header>
+      <h1>Settings</h1>
+      <span id="healthStatus" class="status-dot" title="Backend status"></span>
+    </header>
+
+    <label for="apiBase">Backend API</label>
+    <div class="api-row">
+      <input id="apiBase" type="url" value="http://127.0.0.1:8000" spellcheck="false">
+      <button id="healthButton" type="button">Check</button>
+    </div>
+
+    <div id="messageBox" class="message-box" hidden></div>
+  </main>
+
+  <script src="./settings.js"></script>
+</body>
+</html>

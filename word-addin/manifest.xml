@@ -2,13 +2,17 @@
 <OfficeApp
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
   xsi:type="TaskPaneApp">
   <Id>9bdf7247-bda3-4d70-8ef0-2d6d15bd860b</Id>
-  <Version>0.1.0.0</Version>
+  <Version>0.4.0.0</Version>
   <ProviderName>Word AI Backend</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Word AI Assistant"/>
   <Description DefaultValue="AI writing assistant task pane backed by the local FastAPI service."/>
+  <IconUrl DefaultValue="http://localhost:3000/assets/icon-32.png"/>
+  <SupportUrl DefaultValue="http://localhost:3000/taskpane.html"/>
   <Hosts>
     <Host Name="Document"/>
   </Hosts>
@@ -16,4 +20,174 @@
     <SourceLocation DefaultValue="http://localhost:3000/taskpane.html"/>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="GetStarted.Url"/>
+          </GetStarted>
+          <FunctionFile resid="Commands.Url"/>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <CustomTab id="WordAI.Tab">
+              <Group id="WordAI.SyntaxGroup">
+                <Label resid="SyntaxGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.Syntax">
+                  <Label resid="Syntax.Label"/>
+                  <Supertip>
+                    <Title resid="Syntax.Label"/>
+                    <Description resid="Syntax.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runSyntax</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Group id="WordAI.WordChoiceGroup">
+                <Label resid="WordChoiceGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.WordChoice">
+                  <Label resid="WordChoice.Label"/>
+                  <Supertip>
+                    <Title resid="WordChoice.Label"/>
+                    <Description resid="WordChoice.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runWordChoice</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Group id="WordAI.RewriteGroup">
+                <Label resid="RewriteGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.Rewrite">
+                  <Label resid="Rewrite.Label"/>
+                  <Supertip>
+                    <Title resid="Rewrite.Label"/>
+                    <Description resid="Rewrite.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runRewrite</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Group id="WordAI.AgentGroup">
+                <Label resid="AgentGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.Agent">
+                  <Label resid="Agent.Label"/>
+                  <Supertip>
+                    <Title resid="Agent.Label"/>
+                    <Description resid="Agent.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>WordAI.AgentPane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+              <Group id="WordAI.SettingsGroup">
+                <Label resid="SettingsGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.Settings">
+                  <Label resid="Settings.Label"/>
+                  <Supertip>
+                    <Title resid="Settings.Label"/>
+                    <Description resid="Settings.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>openSettings</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Label resid="Tab.Label"/>
+            </CustomTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="http://localhost:3000/assets/icon-16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="http://localhost:3000/assets/icon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="http://localhost:3000/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="http://localhost:3000/taskpane.html"/>
+        <bt:Url id="Settings.Url" DefaultValue="https://localhost:3443/settings.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="http://localhost:3000/commands.html"/>
+        <bt:Url id="GetStarted.Url" DefaultValue="http://localhost:3000/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Tab.Label" DefaultValue="Word AI"/>
+        <bt:String id="SyntaxGroup.Label" DefaultValue="Syntax"/>
+        <bt:String id="WordChoiceGroup.Label" DefaultValue="Choice"/>
+        <bt:String id="RewriteGroup.Label" DefaultValue="Rewrite"/>
+        <bt:String id="AgentGroup.Label" DefaultValue="Agent"/>
+        <bt:String id="SettingsGroup.Label" DefaultValue="Settings"/>
+        <bt:String id="Syntax.Label" DefaultValue="Syntax"/>
+        <bt:String id="WordChoice.Label" DefaultValue="Word Choice"/>
+        <bt:String id="Rewrite.Label" DefaultValue="Rewrite"/>
+        <bt:String id="Agent.Label" DefaultValue="Agent"/>
+        <bt:String id="Settings.Label" DefaultValue="Settings"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Word AI Assistant is ready"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="Syntax.Tooltip" DefaultValue="Check the current selection and replace it with the AI result."/>
+        <bt:String id="WordChoice.Tooltip" DefaultValue="Improve word choice for the current selection and replace it immediately."/>
+        <bt:String id="Rewrite.Tooltip" DefaultValue="Rewrite the current selection in an academic style and replace it immediately."/>
+        <bt:String id="Agent.Tooltip" DefaultValue="Open the conversation pane for agent chat and command results."/>
+        <bt:String id="Settings.Tooltip" DefaultValue="Show backend API settings and connection check."/>
+        <bt:String id="GetStarted.Description" DefaultValue="Use the Word AI ribbon buttons for quick edits, or open Agent for conversation."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
 </OfficeApp>

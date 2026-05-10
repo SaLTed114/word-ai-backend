@@ -5,7 +5,7 @@
   --surface-muted: #eef3f7;
   --border: #cfd8e3;
   --text: #1f2933;
-  --muted: #5f6f7f;
+  --muted: #627282;
   --accent: #126c78;
   --accent-dark: #0a4d57;
   --danger: #b42318;
@@ -19,6 +19,7 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
@@ -66,7 +67,7 @@ input {
 }
 
 textarea {
-  min-height: 72px;
+  min-height: 76px;
   padding: 9px;
   line-height: 1.45;
   resize: vertical;
@@ -78,17 +79,13 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(18, 108, 120, 0.12);
 }
 
-label {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .pane {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
 }
 
 .header {
@@ -96,7 +93,6 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 2px;
 }
 
 .header h1 {
@@ -106,7 +102,7 @@ label {
 }
 
 .header p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--muted);
   font-size: 12px;
 }
@@ -127,83 +123,86 @@ label {
   background: var(--danger);
 }
 
-.section {
-  padding: 12px;
+.selection-strip,
+.chat-section,
+.composer {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
 
-.api-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+.selection-strip {
+  flex: 0 0 auto;
+  padding: 8px;
 }
 
-.selection-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+.selection-strip strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
 }
 
-.selection-bar strong {
-  font-size: 13px;
-}
-
-.preview,
-.final-text {
+#selectedPreview {
+  max-height: 72px;
   overflow: auto;
   margin: 0;
-  padding: 9px;
+  padding: 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fbfcfd;
-  color: var(--text);
   white-space: pre-wrap;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
-.preview {
-  max-height: 130px;
-}
-
-.button-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 10px 0;
+.chat-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
 }
 
 .chat-log {
-  min-height: 76px;
-  max-height: 160px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 9px;
-  margin-bottom: 8px;
-  background: #fbfcfd;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding-right: 2px;
 }
 
 .chat-message {
-  margin-bottom: 9px;
-  line-height: 1.4;
+  margin-bottom: 10px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.chat-message.user-message {
+  background: #eef7f8;
+  border-color: #b8d7dc;
 }
 
 .chat-message strong {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 5px;
   color: var(--accent-dark);
   font-size: 12px;
 }
 
+.chat-message pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .loading {
-  padding: 9px;
+  padding: 8px;
   border-radius: 6px;
   background: var(--surface-muted);
   color: var(--muted);
@@ -211,7 +210,7 @@ label {
 }
 
 .error-box {
-  padding: 9px;
+  padding: 8px;
   border: 1px solid #ffb4ad;
   border-radius: 6px;
   background: var(--danger-bg);
@@ -220,43 +219,19 @@ label {
   white-space: pre-wrap;
 }
 
-.reply-box {
-  margin-bottom: 8px;
-  line-height: 1.45;
+.composer {
+  flex: 0 0 auto;
+  padding: 8px;
 }
 
-.final-text {
-  max-height: 180px;
-  margin-bottom: 8px;
-}
-
-.actions {
+.composer-actions {
   display: grid;
+  grid-template-columns: auto 1fr;
   gap: 8px;
-  margin-bottom: 8px;
-}
-
-.action-item {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 9px;
-  background: #fbfcfd;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.action-item b {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.action-item p {
-  margin: 4px 0;
-  color: var(--muted);
+  margin-top: 8px;
 }
 
 .primary-button {
-  width: 100%;
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;

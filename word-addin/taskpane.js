@@ -1,80 +1,61 @@
+const EVENT_KEY = "wordAiEvents";
+
 const state = {
-  lastResult: null,
-  lastTextSource: null,
   agentHistory: [],
-  officeReady: false
+  officeReady: false,
+  lastEventIds: new Set()
 };
 
 const elements = {
   hostStatus: document.getElementById("hostStatus"),
-  apiBase: document.getElementById("apiBase"),
-  healthButton: document.getElementById("healthButton"),
   healthStatus: document.getElementById("healthStatus"),
-  refreshButton: document.getElementById("refreshButton"),
   scopeLabel: document.getElementById("scopeLabel"),
   selectedPreview: document.getElementById("selectedPreview"),
-  syntaxButton: document.getElementById("syntaxButton"),
-  wordButton: document.getElementById("wordButton"),
-  styleInput: document.getElementById("styleInput"),
-  styleButton: document.getElementById("styleButton"),
-  instructionInput: document.getElementById("instructionInput"),
   chatLog: document.getElementById("chatLog"),
   agentInput: document.getElementById("agentInput"),
   agentButton: document.getElementById("agentButton"),
   resetAgentButton: document.getElementById("resetAgentButton"),
   loading: document.getElementById("loading"),
-  errorBox: document.getElementById("errorBox"),
-  replyBox: document.getElementById("replyBox"),
-  finalTextBox: document.getElementById("finalTextBox"),
-  actionsBox: document.getElementById("actionsBox"),
-  applyButton: document.getElementById("applyButton")
+  errorBox: document.getElementById("errorBox")
 };
+
+const channel = "BroadcastChannel" in window ? new BroadcastChannel("word-ai") : null;
 
 Office.onReady((info) => {
   state.officeReady = info.host === Office.HostType.Word;
   elements.hostStatus.textContent = state.officeReady
     ? "Connected to Word"
     : "Open this pane inside Microsoft Word.";
-  setTaskButtonsDisabled(!state.officeReady);
-  if (state.officeReady) {
-    refreshSelection();
-  }
+  setBusy(false);
+  refreshSelectionPreview();
+  hydrateCommandEvents();
   checkHealth();
 });
 
-function apiUrl(path) {
-  return `${elements.apiBase.value.replace(/\/$/, "")}${path}`;
+if (channel) {
+  channel.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "word-ai-event") {
+      renderCommandEvent(event.data.payload);
+    }
+  });
 }
+
+window.addEventListener("storage", (event) => {
+  if (event.key === EVENT_KEY) {
+    hydrateCommandEvents();
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    refreshSelectionPreview();
+    hydrateCommandEvents();
+  }
+});
 
 function setBusy(isBusy) {
   elements.loading.hidden = !isBusy;
-  [
-    elements.healthButton,
-    elements.refreshButton,
-    elements.syntaxButton,
-    elements.wordButton,
-    elements.styleButton,
-    elements.agentButton,
-    elements.applyButton
-  ].forEach((button) => {
-    button.disabled = isBusy || (!state.officeReady && button !== elements.healthButton);
-  });
-  if (!isBusy) {
-    elements.applyButton.disabled = !getApplicableText(state.lastResult);
-  }
-}
-
-function setTaskButtonsDisabled(disabled) {
-  [
-    elements.refreshButton,
-    elements.syntaxButton,
-    elements.wordButton,
-    elements.styleButton,
-    elements.agentButton,
-    elements.applyButton
-  ].forEach((button) => {
-    button.disabled = disabled;
-  });
+  elements.agentButton.disabled = isBusy || !state.officeReady;
 }
 
 function showError(message) {
@@ -98,16 +79,11 @@ async function getWordPayload() {
     const bodyText = body.text || "";
     const hasSelection = selectedText.trim().length > 0;
     const text = hasSelection ? selectedText : bodyText;
-    const contextWindow = getContextWindow(bodyText, selectedText);
-
-    state.lastTextSource = {
-      kind: hasSelection ? "selection" : "document"
-    };
 
     return {
       text,
-      context: contextWindow,
-      instruction: elements.instructionInput.value.trim() || null
+      context: getContextWindow(bodyText, selectedText),
+      source: hasSelection ? "selection" : "document"
     };
   });
 }
@@ -128,13 +104,15 @@ function getContextWindow(bodyText, selectedText) {
   };
 }
 
-async function refreshSelection() {
+async function refreshSelectionPreview() {
+  if (!state.officeReady) {
+    return;
+  }
+
   try {
     const payload = await getWordPayload();
-    const source = state.lastTextSource && state.lastTextSource.kind === "selection"
-      ? "Current selection"
-      : "Full document";
-    elements.scopeLabel.textContent = `${source} (${payload.text.length} chars)`;
+    const label = payload.source === "selection" ? "Current selection" : "Full document";
+    elements.scopeLabel.textContent = `${label} (${payload.text.length} chars)`;
     elements.selectedPreview.textContent = payload.text || "(empty)";
   } catch (error) {
     showError(error.message || String(error));
@@ -145,7 +123,7 @@ async function requestJson(path, payload) {
   setBusy(true);
   showError("");
   try {
-    const response = await fetch(apiUrl(path), {
+    const response = await fetch(`http://127.0.0.1:8000${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -163,24 +141,6 @@ async function requestJson(path, payload) {
   }
 }
 
-async function runTask(path, extra = {}) {
-  try {
-    const payload = {
-      ...(await getWordPayload()),
-      ...extra
-    };
-    if (!payload.text.trim()) {
-      showError("Select text or add text to the document before running a task.");
-      return;
-    }
-    await refreshSelection();
-    const result = await requestJson(path, payload);
-    renderResult(result);
-  } catch (error) {
-    showError(error.message || String(error));
-  }
-}
-
 async function runAgent() {
   const message = elements.agentInput.value.trim();
   if (!message) {
@@ -192,16 +152,32 @@ async function runAgent() {
     const selection = await getWordPayload();
     const payload = {
       message,
-      selection: selection.text.trim() ? selection : null,
+      selection: selection.text.trim()
+        ? {
+            text: selection.text,
+            context: selection.context,
+            instruction: null
+          }
+        : null,
       history: state.agentHistory
     };
 
     appendChat("user", message);
     elements.agentInput.value = "";
+    await refreshSelectionPreview();
 
     const result = await requestJson("/agent/chat", payload);
-    renderResult(result);
-    appendChat("assistant", result.reply);
+    const replacement = getApplicableText(result);
+    if (replacement) {
+      await replaceCurrentText(selection.source, replacement);
+    }
+    appendResult("assistant", result, {
+      title: "Agent",
+      replaced: Boolean(replacement)
+    });
+    if (replacement) {
+      await refreshSelectionPreview();
+    }
     state.agentHistory.push({ role: "user", content: message });
     state.agentHistory.push({ role: "assistant", content: result.reply });
   } catch (error) {
@@ -209,25 +185,65 @@ async function runAgent() {
   }
 }
 
-function renderResult(result) {
-  state.lastResult = result;
-  elements.replyBox.textContent = result.reply || "";
-  elements.finalTextBox.textContent = result.final_text || "";
-  elements.actionsBox.innerHTML = "";
+function hydrateCommandEvents() {
+  const events = readStoredEvents();
+  events.forEach(renderCommandEvent);
+}
 
-  (result.actions || []).forEach((action, index) => {
-    const item = document.createElement("div");
-    item.className = "action-item";
-    item.innerHTML = `
-      <b>${index + 1}. ${escapeHtml(action.type || "action")} (${escapeHtml(action.severity || "info")})</b>
-      ${action.original ? `<p>Original: ${escapeHtml(action.original)}</p>` : ""}
-      ${action.replacement ? `<p>Replacement: ${escapeHtml(action.replacement)}</p>` : ""}
-      ${action.reason ? `<p>Reason: ${escapeHtml(action.reason)}</p>` : ""}
-    `;
-    elements.actionsBox.appendChild(item);
+function readStoredEvents() {
+  try {
+    const events = JSON.parse(localStorage.getItem(EVENT_KEY) || "[]");
+    return Array.isArray(events) ? events : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderCommandEvent(event) {
+  if (!event || state.lastEventIds.has(event.id)) {
+    return;
+  }
+  state.lastEventIds.add(event.id);
+
+  if (event.status === "error") {
+    appendChat("system", `${event.title || "Command"} failed: ${event.message}`);
+    return;
+  }
+
+  if (event.status === "started") {
+    appendChat("system", event.message || `${event.title || "Command"} started.`);
+    return;
+  }
+
+  appendResult("assistant", event.result, {
+    title: event.title || "Ribbon command",
+    replaced: event.replaced
   });
+}
 
-  elements.applyButton.disabled = !getApplicableText(result);
+function appendResult(role, result, meta = {}) {
+  const title = meta.title ? `${meta.title}${meta.replaced ? " - replaced selection" : ""}` : role;
+  const parts = [];
+  if (result.reply) {
+    parts.push(result.reply);
+  }
+  if (result.final_text) {
+    parts.push(`Result:\n${result.final_text}`);
+  }
+  (result.actions || []).forEach((action, index) => {
+    const lines = [`${index + 1}. ${action.type || "action"} (${action.severity || "info"})`];
+    if (action.original) {
+      lines.push(`Original: ${action.original}`);
+    }
+    if (action.replacement) {
+      lines.push(`Replacement: ${action.replacement}`);
+    }
+    if (action.reason) {
+      lines.push(`Reason: ${action.reason}`);
+    }
+    parts.push(lines.join("\n"));
+  });
+  appendChat(title, parts.join("\n\n") || "(empty result)");
 }
 
 function getApplicableText(result) {
@@ -240,45 +256,43 @@ function getApplicableText(result) {
   return result.final_text || (replaceAction && replaceAction.replacement) || null;
 }
 
-async function applyResult() {
-  const text = getApplicableText(state.lastResult);
-  if (!text || !state.lastTextSource) {
-    return;
-  }
-
-  try {
-    await Word.run(async (context) => {
-      if (state.lastTextSource.kind === "document") {
-        context.document.body.insertText(text, Word.InsertLocation.replace);
-      } else {
-        const selection = context.document.getSelection();
-        selection.insertText(text, Word.InsertLocation.replace);
-      }
-      await context.sync();
-    });
-    await refreshSelection();
-  } catch (error) {
-    showError(error.message || String(error));
-  }
+async function replaceCurrentText(source, text) {
+  await Word.run(async (context) => {
+    if (source === "document") {
+      context.document.body.insertText(text, Word.InsertLocation.replace);
+    } else {
+      context.document.getSelection().insertText(text, Word.InsertLocation.replace);
+    }
+    await context.sync();
+  });
 }
 
 function appendChat(role, content) {
   const message = document.createElement("div");
-  message.className = "chat-message";
-  message.innerHTML = `<strong>${escapeHtml(role)}</strong>${escapeHtml(content)}`;
+  message.className = role === "user" ? "chat-message user-message" : "chat-message";
+
+  const roleEl = document.createElement("strong");
+  roleEl.textContent = role;
+  const contentEl = document.createElement("pre");
+  contentEl.textContent = content;
+
+  message.appendChild(roleEl);
+  message.appendChild(contentEl);
   elements.chatLog.appendChild(message);
   elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
 }
 
 function resetAgent() {
   state.agentHistory = [];
+  state.lastEventIds.clear();
   elements.chatLog.innerHTML = "";
+  localStorage.removeItem(EVENT_KEY);
 }
 
 async function checkHealth() {
   elements.healthStatus.className = "status-dot";
   try {
-    const response = await fetch(apiUrl("/health"));
+    const response = await fetch("http://127.0.0.1:8000/health");
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -289,22 +303,11 @@ async function checkHealth() {
   }
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-elements.healthButton.addEventListener("click", checkHealth);
-elements.refreshButton.addEventListener("click", refreshSelection);
-elements.syntaxButton.addEventListener("click", () => runTask("/tasks/syntax"));
-elements.wordButton.addEventListener("click", () => runTask("/tasks/word-choice"));
-elements.styleButton.addEventListener("click", () => {
-  runTask("/tasks/style", { style: elements.styleInput.value.trim() || "polished" });
-});
 elements.agentButton.addEventListener("click", runAgent);
 elements.resetAgentButton.addEventListener("click", resetAgent);
-elements.applyButton.addEventListener("click", applyResult);
+elements.agentInput.addEventListener("focus", refreshSelectionPreview);
+elements.agentInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    runAgent();
+  }
+});

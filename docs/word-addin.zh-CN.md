@@ -1,12 +1,6 @@
 # Word 插件接入说明
 
-这个目录提供一个最小 Word Web Add-in。它不改后端代码，只把 Word 任务窗格作为前端，调用现有 FastAPI 接口：
-
-- `GET /health`
-- `POST /tasks/syntax`
-- `POST /tasks/word-choice`
-- `POST /tasks/style`
-- `POST /agent/chat`
+这个目录提供一个最小 Word Web Add-in。它不改后端代码，只把 Word 插件作为前端，调用现有 FastAPI 接口。
 
 ## 启动
 
@@ -20,10 +14,11 @@
 
 ```text
 http://127.0.0.1:8000      后端 API
-http://localhost:3000      Word 插件任务窗格静态文件
+http://localhost:3000      Word 插件静态文件
+https://localhost:3443     Settings 弹窗静态文件
 ```
 
-## 加到 Word
+## 侧载到 Word
 
 在 Word 里侧载这个 manifest：
 
@@ -31,19 +26,41 @@ http://localhost:3000      Word 插件任务窗格静态文件
 word-addin/manifest.xml
 ```
 
-侧载后打开 `Word AI Assistant` 任务窗格。
+如果已经侧载过旧版本，建议先在 Word 的“我的加载项”里移除旧的 `Word AI Assistant`，关闭 Word 后再重新打开。新的 manifest 会在 Word 顶部增加一个 `Word AI` 选项卡。
 
 ## 使用方式
 
-1. 在 Word 文档里选中一段文字。
-2. 在任务窗格点击 `Refresh`，确认当前选区。
-3. 点击 `Syntax`、`Word Choice`、`Rewrite` 或使用 `Agent`。
-4. 如果结果满意，点击 `Apply to Word` 写回文档。
+顶部 `Word AI` 选项卡里有：
 
-如果没有选中文本，插件会把整篇正文发给后端；应用结果时也会替换整篇正文。
+- `Syntax`
+- `Word Choice`
+- `Rewrite`
+- `Agent`
+- `Settings`
 
-## 说明
+前三个按钮会自动读取当前 Word 选区，调用后端，然后直接替换当前选区。如果没有选区，会使用整篇正文。
 
-- 当前版本是开发/原型插件，后端仍然运行在本机。
-- `manifest.xml` 里的任务窗格地址是 `http://localhost:3000/taskpane.html`。
-- 如果你的 Word 环境要求 HTTPS，需要把静态服务换成 HTTPS，再同步修改 `manifest.xml` 的 `SourceLocation`。
+`Agent` 会打开右侧任务窗格。任务窗格现在只保留对话窗口；Ribbon 命令的结果也会追加到这个窗口里。发送 Agent 消息时会自动读取当前选区，不需要手动刷新。如果 Agent 返回了可替换文本，也会直接替换当前选区。
+
+`Settings` 会打开一个独立设置窗口，里面有后端 API 输入框和 `Check` 按钮；不会占用右侧 Agent 任务窗格。
+
+Settings 弹窗必须使用 HTTPS。启动脚本会自动生成本地证书：
+
+```text
+.certs/localhost.pem
+```
+
+如果 Word 仍然阻止 Settings 窗口，运行：
+
+```powershell
+.\scripts\trust_word_addin_cert.ps1
+```
+
+然后重启 Word。
+
+## 注意
+
+- 当前版本仍然是本机开发插件，后端需要保持运行。
+- `manifest.xml` 里的任务窗格地址是 `http://localhost:3000/taskpane.html`，Settings 弹窗地址是 `https://localhost:3443/settings.html`。
+- 如果 Word 缓存了旧 UI，重启 Word，或移除后重新添加加载项。
+- 如果你的 Word 环境要求 HTTPS，需要把静态服务换成 HTTPS，再同步修改 `manifest.xml` 的 `SourceLocation` 和相关 URL。
