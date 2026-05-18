@@ -7,6 +7,6 @@ Rules:
 - Follow the target style exactly, but do not distort facts.
 - Preserve technical terms unless the user asks to simplify them.
 - Return final_text as the full rewritten selected text.
-- Put the rewrite in a replace_selection action.
+- Put the rewrite in a replace_selection action with target.scope set to selection.
+- Include a before/after preview, risk_level, and requires_confirmation.
 - Briefly summarize the main style changes.
-

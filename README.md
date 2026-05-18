@@ -15,8 +15,8 @@ This repository currently focuses on backend capability validation through a REP
 - Word choice checking
 - Style rewriting
 - Agent-style iterative writing assistance
+- Backend-managed agent sessions stored in local SQLite
 - FastAPI HTTP endpoints for backend tasks
-- Static TXT editor demo that calls the backend API
 - External prompt templates
 - ShanghaiTech GenAI gateway direct endpoint support
 
@@ -28,8 +28,6 @@ This repository currently focuses on backend capability validation through a REP
 conda create -n wordplugin python=3.11
 conda activate wordplugin
 ```
-
-The double-click batch launcher expects this environment name by default. If you use a different name, edit `CONDA_ENV` in `scripts/start_demo.bat`.
 
 2. Install dependencies:
 
@@ -67,13 +65,13 @@ Then open:
 http://127.0.0.1:8000/docs
 ```
 
-6. Or open the static text editor demo:
+6. Or run the HTTP CLI after starting the API:
 
-```text
-examples/simple-web/index.html
+```powershell
+python -m app.api_cli
 ```
 
-The demo needs the HTTP API running at `http://127.0.0.1:8000`.
+The HTTP CLI sends real requests to the running backend and prints `reply`, `final_text`, and `actions` without requiring handwritten PowerShell JSON.
 
 7. Try a REPL command:
 
@@ -94,13 +92,56 @@ EOF
 - `help`: Show available commands
 - `exit`: Quit
 
+## HTTP CLI
+
+Start the backend first:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+Then run:
+
+```powershell
+python -m app.api_cli
+```
+
+Available commands:
+
+- `health`: Check backend health
+- `syntax`: Call `POST /tasks/syntax`
+- `word`: Call `POST /tasks/word-choice`
+- `style`: Call `POST /tasks/style`
+- `agent`: Create an agent session and chat through `POST /agent/sessions/{session_id}/messages`
+- `sessions`: List recent agent sessions
+- `messages <id>`: Show messages in one session
+
+Inside `agent` mode:
+
+- `/text`: Attach selected text for later turns
+- `/clear-text`: Clear the attached selected text
+- `/messages`: Show messages in the current session
+- `/new`: Start a new session
+- `/exit`: Leave agent mode
+
+You can also point the CLI at another backend URL:
+
+```powershell
+python -m app.api_cli --base-url http://127.0.0.1:8000
+```
+
 ## HTTP API
 
 - `GET /health`: Check service and AI configuration status
 - `POST /tasks/syntax`: Check grammar, spelling, punctuation, and clarity
 - `POST /tasks/word-choice`: Check word choice and phrasing
 - `POST /tasks/style`: Rewrite text into a target style
-- `POST /agent/chat`: Chat with the writing assistant using optional selected text and history
+- `POST /agent/sessions`: Create a backend-managed agent session
+- `GET /agent/sessions`: List recent agent sessions
+- `GET /agent/sessions/{session_id}`: Get one agent session
+- `DELETE /agent/sessions/{session_id}`: Delete one agent session
+- `GET /agent/sessions/{session_id}/messages`: List messages in a session
+- `POST /agent/sessions/{session_id}/messages`: Send one user message and receive one assistant turn
 
 Example request for `POST /tasks/syntax`:
 
@@ -123,47 +164,34 @@ Both the REPL and HTTP API call the same service layer:
 REPL / HTTP API -> app.services -> app.ai_client -> model gateway
 ```
 
-The agent mode is currently a lightweight multi-turn writing assistant. It can use selected text, optional context, and conversation history, then return both a user-facing reply and structured edit actions.
+The agent mode is currently a lightweight multi-turn writing assistant. It can use selected text, optional context, and backend-managed conversation history, then return both a user-facing reply and structured edit actions.
 
-## Static Web Demo
+Agent sessions store conversation history in a local SQLite database at `data/word_ai.sqlite3`, which is ignored by git.
 
-The static demo in `examples/simple-web/` is a small TXT editor. It can:
+`actions` use the v2 action schema. Each action includes:
 
-- Open and save `.txt` content
-- Send the full text or current selection to backend tasks
-- Run syntax, word choice, style, and agent requests
-- Show `reply`, `final_text`, and structured `actions`
-- Apply returned text back to the editor
+- `id`: stable id for preview and later application
+- `type`: suggested operation, such as `replace_selection`, `replace_range`, `add_comment`, or `ask_user`
+- `target`: where the action applies
+- `preview`: before/after text for user review
+- `risk_level`: `info`, `low`, `medium`, or `high`
+- `requires_confirmation`: whether the UI must ask before applying the action
 
-It is intentionally framework-free so the data flow stays easy to inspect before moving to Word/WPS integration.
+Clients should treat actions as proposals. Editing actions should be previewed and confirmed before changing a document.
 
-You can launch the API server, API docs, and static editor demo with:
-
-```powershell
-.\scripts\start_demo.ps1
-```
-
-On Windows, you can also double-click:
+Minimal session flow through the HTTP CLI:
 
 ```text
-scripts/start_demo.bat
-```
-
-The batch wrapper activates the `wordplugin` conda environment before running the PowerShell launcher. Edit `CONDA_ENV` inside the file if your environment has a different name.
-
-Recommended first-time setup for the batch launcher:
-
-```powershell
-conda create -n wordplugin python=3.11
-conda activate wordplugin
-pip install -r requirements.txt
-```
-
-If PowerShell blocks the script, run:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\start_demo.ps1
+word-ai-http> agent
+Session title [cli]: demo
+agent> /text
+Enter selected text. Finish with a line containing only EOF.
+This method is good and useful.
+EOF
+Before context (optional):
+After context (optional):
+Instruction (optional):
+agent> Explain this sentence and suggest a formal rewrite.
 ```
 
 ## Security

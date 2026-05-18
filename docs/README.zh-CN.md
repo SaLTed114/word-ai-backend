@@ -15,8 +15,8 @@
 - 用词检查
 - 文风改写
 - Agent 式多轮写作辅助
+- 后端维护的 agent session，并用本地 SQLite 保存消息
 - FastAPI HTTP 接口
-- 调用后端 API 的静态 TXT 编辑器 demo
 - 外置 prompt 模板
 - 支持上海科技大学 GenAI 网关 direct endpoint 调用方式
 
@@ -28,8 +28,6 @@
 conda create -n wordplugin python=3.11
 conda activate wordplugin
 ```
-
-双击启动用的 bat 脚本默认会激活这个环境名。如果你使用其他环境名，请修改 `scripts/start_demo.bat` 里的 `CONDA_ENV`。
 
 2. 安装依赖：
 
@@ -67,13 +65,13 @@ uvicorn app.main:app --reload
 http://127.0.0.1:8000/docs
 ```
 
-6. 或者打开静态文本编辑器 demo：
+6. 或者在启动 HTTP API 后使用 HTTP CLI：
 
-```text
-examples/simple-web/index.html
+```powershell
+python -m app.api_cli
 ```
 
-这个 demo 需要 HTTP API 正在 `http://127.0.0.1:8000` 运行。
+HTTP CLI 会真实请求正在运行的后端，并把 `reply`、`final_text`、`actions` 排版输出；这样就不需要在 PowerShell 里手写 JSON。
 
 7. 试用一个 REPL 命令：
 
@@ -94,13 +92,56 @@ EOF
 - `help`：显示帮助
 - `exit`：退出
 
+## HTTP CLI
+
+先启动后端：
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+然后运行：
+
+```powershell
+python -m app.api_cli
+```
+
+可用命令：
+
+- `health`：检查后端状态
+- `syntax`：调用 `POST /tasks/syntax`
+- `word`：调用 `POST /tasks/word-choice`
+- `style`：调用 `POST /tasks/style`
+- `agent`：创建 agent session，并通过 `POST /agent/sessions/{session_id}/messages` 对话
+- `sessions`：列出最近的 agent session
+- `messages <id>`：查看某个 session 里的消息
+
+进入 `agent` 模式后：
+
+- `/text`：附加选中文本，供后续对话使用
+- `/clear-text`：清除已附加的选中文本
+- `/messages`：查看当前 session 消息
+- `/new`：创建新 session
+- `/exit`：退出 agent 模式
+
+如果后端不在默认地址，可以指定：
+
+```powershell
+python -m app.api_cli --base-url http://127.0.0.1:8000
+```
+
 ## HTTP API
 
 - `GET /health`：检查服务状态和 AI 配置状态
 - `POST /tasks/syntax`：检查语法、拼写、标点和表达清晰度
 - `POST /tasks/word-choice`：检查用词和短语表达
 - `POST /tasks/style`：将文本改写为目标文风
-- `POST /agent/chat`：基于可选选中文本和历史记录进行写作助手对话
+- `POST /agent/sessions`：创建一个由后端维护历史的 agent 会话
+- `GET /agent/sessions`：列出最近的 agent 会话
+- `GET /agent/sessions/{session_id}`：查看单个 agent 会话
+- `DELETE /agent/sessions/{session_id}`：删除单个 agent 会话
+- `GET /agent/sessions/{session_id}/messages`：列出会话内消息
+- `POST /agent/sessions/{session_id}/messages`：向会话发送一条用户消息，并得到一轮 assistant 回复
 
 `POST /tasks/syntax` 请求示例：
 
@@ -123,47 +164,34 @@ REPL 和 HTTP API 共用同一层服务函数：
 REPL / HTTP API -> app.services -> app.ai_client -> 模型网关
 ```
 
-当前 agent 模式是一个轻量多轮写作助手。它可以使用选中文本、可选上下文和对话历史，并返回用户可读回复以及结构化修改动作。
+当前 agent 模式是一个轻量多轮写作助手。它可以使用选中文本、可选上下文和后端维护的对话历史，并返回用户可读回复以及结构化修改动作。
 
-## 静态网页 Demo
+session API 会把对话历史保存在本地 SQLite 数据库 `data/word_ai.sqlite3` 中；该目录已被 `.gitignore` 忽略。
 
-`examples/simple-web/` 中的静态 demo 是一个小型 TXT 编辑器。它可以：
+`actions` 现在使用 v2 动作结构。每个 action 包含：
 
-- 打开和保存 `.txt` 内容
-- 将全文或当前选区发送给后端任务接口
-- 调用语法检查、用词检查、文风改写和 agent 对话
-- 展示 `reply`、`final_text` 和结构化 `actions`
-- 将返回文本应用回编辑器
+- `id`：用于预览和后续应用的稳定编号
+- `type`：建议操作，例如 `replace_selection`、`replace_range`、`add_comment`、`ask_user`
+- `target`：动作要作用的位置
+- `preview`：应用前后的文本预览
+- `risk_level`：风险等级，可能是 `info`、`low`、`medium`、`high`
+- `requires_confirmation`：前端或插件在应用前是否必须让用户确认
 
-它没有使用任何前端框架，方便先观察前端和后端之间的数据流，再迁移到 Word/WPS 插件环境。
+客户端应把 actions 当作“建议动作”，而不是直接执行的命令。会修改文档内容的 action 应先展示预览并等待用户确认。
 
-可以用下面的脚本一键启动 API 服务、API 文档和静态编辑器 demo：
-
-```powershell
-.\scripts\start_demo.ps1
-```
-
-Windows 下也可以直接双击：
+通过 HTTP CLI 进行最小 session 调用：
 
 ```text
-scripts/start_demo.bat
-```
-
-这个 bat 包装脚本会先激活 `wordplugin` conda 环境，再调用 PowerShell 启动脚本。如果你的环境名不同，可以修改 bat 文件里的 `CONDA_ENV`。
-
-推荐首次使用 bat 前先执行：
-
-```powershell
-conda create -n wordplugin python=3.11
-conda activate wordplugin
-pip install -r requirements.txt
-```
-
-如果 PowerShell 阻止脚本运行，可以在当前终端临时放开执行策略：
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\start_demo.ps1
+word-ai-http> agent
+Session title [cli]: demo
+agent> /text
+Enter selected text. Finish with a line containing only EOF.
+This method is good and useful.
+EOF
+Before context (optional):
+After context (optional):
+Instruction (optional):
+agent> 解释这句话的问题，并给一个更正式的版本。
 ```
 
 ## 安全提醒

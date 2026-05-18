@@ -19,13 +19,13 @@
 - 将 prompt 从代码中拆出到 `prompts/`
 - 使用统一的 `TaskResponse` 返回结构化结果
 - 将业务逻辑抽到 `app/services.py`，供 REPL 和 HTTP API 共用
+- 提供后端维护的 agent session，并用本地 SQLite 保存消息历史
 - 提供无框架静态 TXT 编辑器 demo，用于验证前后端数据流
 
 暂未完成：
 
 - 前端页面
 - Word/WPS 插件壳子
-- 持久化会话
 - 自动化测试
 - 一键安装程序
 
@@ -40,8 +40,10 @@ word-ai-backend/
 │  ├─ main.py
 │  ├─ models.py
 │  ├─ prompts.py
+│  ├─ api_cli.py
 │  ├─ repl.py
-│  └─ services.py
+│  ├─ services.py
+│  └─ storage.py
 ├─ prompts/
 │  ├─ agent.md
 │  ├─ style.md
@@ -99,16 +101,28 @@ word-ai-backend/
 - `task`：任务类型，例如 `syntax`、`style`、`agent`
 - `reply`：给用户看的简短回复
 - `summary`：结果摘要
-- `actions`：可被 UI 应用的操作建议
+- `actions`：可被 UI 预览、确认和应用的操作建议
 - `final_text`：完整改写后的文本
 
-其中 `actions` 是后续前端集成的关键。前端可以把 `replace_selection` 渲染成“应用修改”按钮。
+其中 `actions` 是后续前端集成的关键。当前使用 v2 动作结构，包含：
 
-`AgentChatRequest` 用于 agent HTTP 接口，包含：
+- `id`：动作编号
+- `type`：动作类型，例如 `replace_selection`、`replace_range`、`add_comment`、`ask_user`
+- `target`：作用位置，例如选区、范围、段落、章节、全文或光标位置
+- `original` / `replacement`：修改前后文本
+- `preview`：给用户确认用的前后预览
+- `reason`：为什么建议这个动作
+- `risk_level`：动作风险等级
+- `requires_confirmation`：应用前是否必须确认
 
-- `message`：用户本轮消息
-- `selection`：当前选中文本和上下文，可为空
-- `history`：前端或 REPL 保存的对话历史
+前端或 Word 插件应把 `actions` 当作“建议动作”，不要把修改类 action 直接静默写入文档。尤其是 `target.scope=document` 或 `risk_level=high` 的动作，必须显式确认。
+
+agent session API 使用以下模型：
+
+- `AgentSession`：一个后端维护的会话
+- `AgentSessionMessage`：会话中的单条消息
+- `AgentSessionTurnRequest`：向会话发送一轮用户输入
+- `AgentSessionTurnResponse`：一轮 agent 回复以及对应的结构化结果
 
 ### `app/prompts.py`
 
@@ -126,6 +140,23 @@ word-ai-backend/
 - `run_agent`
 
 这一层负责把请求模型转换为 prompt，并调用 `AIClient` 得到 `TaskResponse`。后续如果要改 prompt、响应结构或任务逻辑，应优先在这一层调整，而不是让 REPL 和 HTTP API 各自维护一套逻辑。
+
+### `app/storage.py`
+
+负责 agent session 的本地持久化。当前使用 Python 标准库 `sqlite3`，默认数据库路径是：
+
+```text
+data/word_ai.sqlite3
+```
+
+这个数据库用于保存：
+
+- agent 会话
+- 用户消息
+- assistant 消息
+- assistant 返回的 `TaskResponse`
+
+`data/` 已经被 `.gitignore` 忽略，不会把本地会话历史提交到仓库。
 
 ### `app/repl.py`
 
@@ -149,6 +180,28 @@ REPL 的意义是绕开 Word/WPS 插件环境，先快速验证后端能力。
 
 REPL 当前只负责读取用户输入和打印结果，具体业务逻辑走 `app/services.py`。
 
+### `app/api_cli.py`
+
+HTTP API 调试入口。运行方式：
+
+```powershell
+python -m app.api_cli
+```
+
+它和 `app/repl.py` 的区别是：`api_cli` 不直接调用服务层，而是向正在运行的 FastAPI 服务发送真实 HTTP 请求。这样可以避免在 PowerShell 中手写 JSON，也可以更接近未来 CLI、前端或 Word 插件会使用的接口链路。
+
+常用命令：
+
+- `health`
+- `syntax`
+- `word`
+- `style`
+- `agent`
+- `sessions`
+- `messages <session_id>`
+
+其中 `agent` 命令会创建后端 session，然后通过 `/agent/sessions/{session_id}/messages` 发送消息。
+
 ### `app/main.py`
 
 FastAPI HTTP 服务入口。运行方式：
@@ -169,7 +222,12 @@ http://127.0.0.1:8000/docs
 - `POST /tasks/syntax`
 - `POST /tasks/word-choice`
 - `POST /tasks/style`
-- `POST /agent/chat`
+- `POST /agent/sessions`
+- `GET /agent/sessions`
+- `GET /agent/sessions/{session_id}`
+- `DELETE /agent/sessions/{session_id}`
+- `GET /agent/sessions/{session_id}/messages`
+- `POST /agent/sessions/{session_id}/messages`
 
 ### `prompts/`
 
@@ -246,14 +304,23 @@ uvicorn app.main:app --reload
 - 可选的选中文本与上下文
 - 可选的历史消息
 
-REPL 中通过 `/text` 附加选中文本。每次模型回复后，REPL 会把用户消息和 assistant 回复追加到本轮历史里。HTTP API 中，前端需要自己维护 `history` 并传给 `/agent/chat`。
+REPL 中通过 `/text` 附加选中文本。每次模型回复后，REPL 会把用户消息和 assistant 回复追加到本轮历史里。
+
+HTTP API 中的正式 agent 调用方式是 `/agent/sessions` 系列接口。它的基本流程是：
+
+```text
+POST /agent/sessions
+-> 得到 session_id
+-> POST /agent/sessions/{session_id}/messages
+-> 后端读取历史、调用模型、保存用户消息和 assistant 回复
+```
 
 agent 返回统一的 `TaskResponse`：
 
 - `reply` 用于聊天窗口展示
 - `summary` 用于摘要展示
 - `final_text` 用于完整预览
-- `actions` 用于前端渲染“应用修改”等按钮
+- `actions` 用于前端渲染预览、确认和“应用修改”等按钮
 
 ## 推荐开发路线
 

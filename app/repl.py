@@ -7,8 +7,8 @@ from pydantic import ValidationError
 
 from app.ai_client import AIClient, AIClientError
 from app.config import AISettings
-from app.models import AgentChatRequest, AgentMessage, TaskResponse, TextRequest
-from app.services import run_agent, run_style, run_syntax, run_word_choice
+from app.models import AgentMessage, TaskResponse, TextRequest
+from app.services import run_agent_turn, run_style, run_syntax, run_word_choice
 
 
 HELP = """
@@ -149,12 +149,12 @@ async def _run_agent(client: AIClient) -> None:
         if not message:
             continue
         try:
-            request = AgentChatRequest(
+            response = await run_agent_turn(
+                client=client,
                 message=message,
                 selection=selection,
                 history=history,
             )
-            response = await run_agent(client, request)
             _print_response(response)
             history.append(AgentMessage(role="user", content=message))
             history.append(AgentMessage(role="assistant", content=response.reply))
@@ -192,11 +192,21 @@ def _print_response(response: TaskResponse) -> None:
     if response.actions:
         print("\n--- Actions ---")
         for index, action in enumerate(response.actions, 1):
-            print(f"{index}. [{action.severity}] {action.type}")
+            print(f"{index}. [{action.risk_level}] {action.type} ({action.id})")
+            print(f"   target: {action.target.scope}")
+            if action.target.start is not None or action.target.end is not None:
+                print(f"   range: {action.target.start}..{action.target.end}")
+            if action.requires_confirmation:
+                print("   requires confirmation: true")
             if action.original:
                 print(f"   original: {action.original}")
             if action.replacement:
                 print(f"   replacement: {action.replacement}")
+            if action.preview:
+                if action.preview.before:
+                    print(f"   preview before: {action.preview.before}")
+                if action.preview.after:
+                    print(f"   preview after: {action.preview.after}")
             if action.reason:
                 print(f"   reason: {action.reason}")
 

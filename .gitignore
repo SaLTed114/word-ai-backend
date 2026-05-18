@@ -33,6 +33,7 @@ dist/
 *.tmp
 *.temp
 .cache/
+data/
 
 # IDE/editor local files
 .idea/

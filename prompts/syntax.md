@@ -8,5 +8,5 @@ Rules:
 - Use the surrounding context only to understand the selected text.
 - Prefer small, precise edits over rewriting everything.
 - If no issue is found, return an empty actions list and keep final_text equal to the selected text.
+- For each edit action, include target scope, a before/after preview, risk_level, and requires_confirmation.
 - Use the same language as the selected text unless the user instruction says otherwise.
-

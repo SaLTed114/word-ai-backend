@@ -1,13 +1,34 @@
 from __future__ import annotations
 
+from uuid import uuid4
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-ActionType = Literal["replace_selection", "replace_span", "insert_after", "comment", "none"]
+ActionType = Literal[
+    "replace_selection",
+    "replace_range",
+    "replace_span",
+    "insert_before",
+    "insert_after",
+    "add_comment",
+    "comment",
+    "highlight",
+    "ask_user",
+    "none",
+]
+ActionScope = Literal[
+    "selection",
+    "range",
+    "paragraph",
+    "section",
+    "document",
+    "cursor",
+    "none",
+]
 TaskType = Literal["syntax", "word_choice", "style", "agent"]
-Severity = Literal["info", "low", "medium", "high"]
+RiskLevel = Literal["info", "low", "medium", "high"]
 
 
 class TextContext(BaseModel):
@@ -24,14 +45,59 @@ class TextRequest(BaseModel):
     style: str | None = None
 
 
+class ActionTarget(BaseModel):
+    scope: ActionScope = Field(
+        default="selection",
+        description="Where this action should be applied.",
+    )
+    start: int | None = Field(
+        default=None,
+        description="Optional start offset inside the selected text or target scope.",
+    )
+    end: int | None = Field(
+        default=None,
+        description="Optional end offset inside the selected text or target scope.",
+    )
+    anchor_text: str | None = Field(
+        default=None,
+        description="Optional nearby text used by a client to locate the action target.",
+    )
+    occurrence: int | None = Field(
+        default=None,
+        description="Optional 1-based occurrence index when anchor_text appears more than once.",
+    )
+
+
+class ActionPreview(BaseModel):
+    before: str | None = Field(default=None, description="Text before applying the action.")
+    after: str | None = Field(default=None, description="Text after applying the action.")
+
+
 class TextAction(BaseModel):
+    id: str = Field(
+        default_factory=lambda: uuid4().hex,
+        description="Stable action id for preview, confirmation, and later application.",
+    )
     type: ActionType = "none"
+    target: ActionTarget = Field(default_factory=ActionTarget)
     original: str | None = None
     replacement: str | None = None
+    preview: ActionPreview | None = None
     reason: str | None = None
-    severity: Severity = "info"
-    start: int | None = Field(default=None, description="Optional start offset in selected text.")
-    end: int | None = Field(default=None, description="Optional end offset in selected text.")
+    risk_level: RiskLevel = Field(
+        default="info",
+        description="Estimated risk if this action is applied automatically.",
+    )
+    requires_confirmation: bool = Field(
+        default=True,
+        description="Whether a UI must ask the user before applying this action.",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Optional model confidence from 0 to 1.",
+    )
 
 
 class TaskResponse(BaseModel):
@@ -47,7 +113,34 @@ class AgentMessage(BaseModel):
     content: str
 
 
-class AgentChatRequest(BaseModel):
+class AgentSessionCreateRequest(BaseModel):
+    title: str | None = Field(default=None, description="Optional human-readable session title.")
+
+
+class AgentSession(BaseModel):
+    id: str
+    title: str | None = None
+    created_at: str
+    updated_at: str
+    message_count: int = 0
+
+
+class AgentSessionMessage(BaseModel):
+    id: int
+    session_id: str
+    role: Literal["user", "assistant", "system"]
+    content: str
+    created_at: str
+    response: TaskResponse | None = None
+
+
+class AgentSessionTurnRequest(BaseModel):
     message: str
     selection: TextRequest | None = None
-    history: list[AgentMessage] = Field(default_factory=list)
+
+
+class AgentSessionTurnResponse(BaseModel):
+    session: AgentSession
+    user_message: AgentSessionMessage
+    assistant_message: AgentSessionMessage
+    response: TaskResponse

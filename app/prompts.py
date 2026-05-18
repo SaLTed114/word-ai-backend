@@ -17,17 +17,36 @@ Return only valid JSON matching this schema:
   "summary": "one sentence summary, or null",
   "actions": [
     {
-      "type": "replace_selection | replace_span | insert_after | comment | none",
+      "id": "short stable id such as action_1",
+      "type": "replace_selection | replace_range | insert_before | insert_after | add_comment | highlight | ask_user | none",
+      "target": {
+        "scope": "selection | range | paragraph | section | document | cursor | none",
+        "start": null,
+        "end": null,
+        "anchor_text": "nearby text used to locate this action, or null",
+        "occurrence": null
+      },
       "original": "text being changed, or null",
       "replacement": "replacement text, or null",
+      "preview": {
+        "before": "text before applying this action, or null",
+        "after": "text after applying this action, or null"
+      },
       "reason": "why this action is suggested, or null",
-      "severity": "info | low | medium | high",
-      "start": null,
-      "end": null
+      "risk_level": "info | low | medium | high",
+      "requires_confirmation": true,
+      "confidence": 0.0
     }
   ],
   "final_text": "full revised selected text, or null"
 }
+Rules for actions:
+- Use replace_selection for a complete selected-text rewrite.
+- Use replace_range only when start/end offsets inside the selected text are known.
+- Use add_comment for feedback that should not edit the document text.
+- Use ask_user when a clarification is needed before editing.
+- Set requires_confirmation to true for all edits that change document text.
+- Set risk_level to high for whole-document or meaning-changing edits.
 Do not wrap the JSON in Markdown.
 """
 
@@ -82,4 +101,3 @@ def build_agent_prompt(message: str, request: TextRequest | None = None) -> str:
         parts.extend(["Current document selection:", format_text_request(request)])
     parts.append(RESPONSE_CONTRACT)
     return "\n\n".join(parts)
-
