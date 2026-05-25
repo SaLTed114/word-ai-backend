@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.ai_client import AIClient
-from app.models import AgentMessage, TaskResponse, TextRequest
+from app.models import AgentMessage, AgentSessionMemory, TaskResponse, TextRequest
 from app.prompts import build_agent_prompt, build_task_prompt
 
 
@@ -25,14 +25,41 @@ async def run_agent_turn(
     message: str,
     selection: TextRequest | None = None,
     history: list[AgentMessage] | None = None,
+    memory: AgentSessionMemory | None = None,
 ) -> TaskResponse:
     history = history or []
+    memory_text = _format_memory(memory)
     history_text = _format_history(history)
+    sections: list[str] = []
     if history_text:
-        message = f"Conversation history:\n{history_text}\n\nLatest user message:\n{message}"
+        sections.append(f"Conversation history:\n{history_text}")
+    if memory_text:
+        sections.append(f"Session memory:\n{memory_text}")
+    sections.append(f"Latest user message:\n{message}")
+    message = "\n\n".join(sections)
     prompt = build_agent_prompt(message, selection)
     return await client.complete_task(prompt)
 
 
 def _format_history(history) -> str:
     return "\n".join(f"{item.role}: {item.content}" for item in history)
+
+
+def _format_memory(memory: AgentSessionMemory | None) -> str:
+    if memory is None:
+        return ""
+
+    parts: list[str] = []
+    if memory.document_summary:
+        parts.append(f"Document summary: {memory.document_summary}")
+    if memory.writing_goals:
+        parts.append("Writing goals:\n" + _format_list(memory.writing_goals))
+    if memory.key_terms:
+        parts.append("Key terms:\n" + _format_list(memory.key_terms))
+    if memory.user_preferences:
+        parts.append("User preferences:\n" + _format_list(memory.user_preferences))
+    return "\n\n".join(parts)
+
+
+def _format_list(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items)

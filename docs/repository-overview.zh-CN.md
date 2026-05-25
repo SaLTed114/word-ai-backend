@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-本仓库是 Word/WPS AI 写作助手项目的新后端原型。它从旧插件项目中拆出后端能力，先用 REPL 和 HTTP API 验证模型调用、prompt 设计、上下文输入、结构化响应和 agent 交互，再考虑前端 UI、Word 插件或 WPS 插件集成。
+本仓库是 Word/WPS AI 写作助手项目的新后端原型。它从旧插件项目中拆出后端能力，先用 FastAPI HTTP API 和 HTTP CLI 验证模型调用、prompt 设计、上下文输入、结构化响应和 agent 交互，再考虑前端 UI、Word 插件或 WPS 插件集成。
 
 这样做的目标是减少调试复杂度：先确认“文本处理能力”本身可靠，再把它接入不同的用户界面。
 
@@ -13,13 +13,15 @@
 - 通过 `.env` 读取模型配置
 - 支持上海科技大学 GenAI 网关的 direct endpoint
 - 支持标准 OpenAI SDK 风格配置的预留入口
-- 提供 REPL 调试入口
 - 提供 FastAPI HTTP API
+- 提供 HTTP CLI 调试入口
 - 支持 `syntax`、`word`、`style`、`agent` 四类命令
 - 将 prompt 从代码中拆出到 `prompts/`
 - 使用统一的 `TaskResponse` 返回结构化结果
-- 将业务逻辑抽到 `app/services.py`，供 REPL 和 HTTP API 共用
+- 将业务逻辑抽到 `app/services.py`，供 HTTP API 复用
 - 提供后端维护的 agent session，并用本地 SQLite 保存消息历史
+- 提供 session memory，保存文档摘要、写作目标、术语和用户偏好
+- 提供 context builder，将文档全文、选区和作用范围整理成模型输入
 - 提供无框架静态 TXT 编辑器 demo，用于验证前后端数据流
 
 暂未完成：
@@ -37,11 +39,11 @@ word-ai-backend/
 │  ├─ __init__.py
 │  ├─ ai_client.py
 │  ├─ config.py
+│  ├─ context_builder.py
 │  ├─ main.py
 │  ├─ models.py
 │  ├─ prompts.py
 │  ├─ api_cli.py
-│  ├─ repl.py
 │  ├─ services.py
 │  └─ storage.py
 ├─ prompts/
@@ -80,6 +82,20 @@ word-ai-backend/
 - `OPENAI_USE_JSON_MODE`
 
 其中 `OPENAI_API_ENDPOINT` 用于学校 GenAI 网关这种直接请求地址；`OPENAI_TRUST_ENV=false` 用于避免 `httpx` 自动读取系统代理环境变量。
+
+### `app/context_builder.py`
+
+负责把前端、CLI 或 Word 插件拿到的文档级信息整理成模型调用使用的 `TextRequest`。
+
+它支持：
+
+- 根据 `selection.start` / `selection.end` 从 `document_text` 中切出选区
+- 根据 `selection.text` 在 `document_text` 中定位选区
+- 按 `context_window_chars` 截取 before/after 上下文
+- 将 `active_scope=paragraph` 的选区扩展到当前段落
+- 对重复选区、选区不匹配、未实现的 section scope 给出 warnings
+
+后续如果要实现“API 选择部分上下文，而不是只考虑选框中的文本”，应优先扩展这一层。
 
 ### `app/ai_client.py`
 
@@ -121,25 +137,33 @@ agent session API 使用以下模型：
 
 - `AgentSession`：一个后端维护的会话
 - `AgentSessionMessage`：会话中的单条消息
+- `AgentSessionMemory`：会话级记忆
+- `AgentSessionMemoryUpdate`：更新会话记忆的请求体
 - `AgentSessionTurnRequest`：向会话发送一轮用户输入
 - `AgentSessionTurnResponse`：一轮 agent 回复以及对应的结构化结果
+
+context builder 使用以下模型：
+
+- `DocumentContextRequest`：文档全文、选区、标题、作用范围和上下文窗口配置
+- `DocumentSelection`：选中文本或选区起止 offset
+- `ContextBuildResult`：构造出的 `TextRequest`、上下文长度和 warning
 
 ### `app/prompts.py`
 
 负责加载 prompt 文件，并把用户选中文本、上下文、目标风格和输出格式约束组合成最终 prompt。
 
-当前所有任务都共享一个结构化 JSON 输出约束，便于 REPL、HTTP API 和未来 UI 使用同一套响应格式。
+当前所有任务都共享一个结构化 JSON 输出约束，便于 HTTP API、HTTP CLI 和未来 UI 使用同一套响应格式。
 
 ### `app/services.py`
 
-业务服务层。REPL 和 HTTP API 都调用这里的函数：
+业务服务层。HTTP API 调用这里的函数：
 
 - `run_syntax`
 - `run_word_choice`
 - `run_style`
-- `run_agent`
+- `run_agent_turn`
 
-这一层负责把请求模型转换为 prompt，并调用 `AIClient` 得到 `TaskResponse`。后续如果要改 prompt、响应结构或任务逻辑，应优先在这一层调整，而不是让 REPL 和 HTTP API 各自维护一套逻辑。
+这一层负责把请求模型转换为 prompt，并调用 `AIClient` 得到 `TaskResponse`。后续如果要改 prompt、响应结构或任务逻辑，应优先在这一层调整，而不是让不同入口各自维护一套逻辑。
 
 ### `app/storage.py`
 
@@ -155,30 +179,9 @@ data/word_ai.sqlite3
 - 用户消息
 - assistant 消息
 - assistant 返回的 `TaskResponse`
+- session memory，包括文档摘要、写作目标、术语和用户偏好
 
 `data/` 已经被 `.gitignore` 忽略，不会把本地会话历史提交到仓库。
-
-### `app/repl.py`
-
-命令行调试入口。运行方式：
-
-```powershell
-python -m app.repl
-```
-
-支持命令：
-
-- `config`
-- `syntax`
-- `word`
-- `style`
-- `agent`
-- `help`
-- `exit`
-
-REPL 的意义是绕开 Word/WPS 插件环境，先快速验证后端能力。
-
-REPL 当前只负责读取用户输入和打印结果，具体业务逻辑走 `app/services.py`。
 
 ### `app/api_cli.py`
 
@@ -188,7 +191,9 @@ HTTP API 调试入口。运行方式：
 python -m app.api_cli
 ```
 
-它和 `app/repl.py` 的区别是：`api_cli` 不直接调用服务层，而是向正在运行的 FastAPI 服务发送真实 HTTP 请求。这样可以避免在 PowerShell 中手写 JSON，也可以更接近未来 CLI、前端或 Word 插件会使用的接口链路。
+`api_cli` 向正在运行的 FastAPI 服务发送真实 HTTP 请求。这样可以避免在 PowerShell 中手写 JSON，也可以更接近未来 CLI、前端或 Word 插件会使用的接口链路。
+
+CLI 的文本输入走 `document_context`。用户输入文档全文、选中文本或 offset、作用范围后，CLI 会先调用 `/context/build`，再把后端生成的 `TextRequest` 发送给具体任务接口。这样使用者不需要手动填写 `before` / `after`。
 
 常用命令：
 
@@ -196,11 +201,31 @@ python -m app.api_cli
 - `syntax`
 - `word`
 - `style`
+- `context`
 - `agent`
 - `sessions`
 - `messages <session_id>`
+- `memory <session_id>`
+- `set-memory <session_id>`
 
-其中 `agent` 命令会创建后端 session，然后通过 `/agent/sessions/{session_id}/messages` 发送消息。
+其中 `agent` 命令会创建后端 session，然后通过 `/agent/sessions/{session_id}/messages` 发送消息。agent 模式内也支持 `/memory` 和 `/set-memory`，用于查看或替换当前 session 的记忆。
+
+### `scripts/test_agent_flow.py`
+
+固定 agent 流程测试脚本。运行前需要先启动 HTTP API：
+
+```powershell
+uvicorn app.main:app --reload
+python .\scripts\test_agent_flow.py
+```
+
+如果只想测试后端链路、不真实调用模型，可以运行：
+
+```powershell
+python .\scripts\test_agent_flow.py --mock
+```
+
+脚本会创建临时 session，设置 session memory，发送带 `document_context` 的 agent 消息，读取消息历史，并在默认情况下删除测试 session。它适合用来检查 agent session、context builder、memory 和 structured action 是否能串起来。
 
 ### `app/main.py`
 
@@ -222,11 +247,14 @@ http://127.0.0.1:8000/docs
 - `POST /tasks/syntax`
 - `POST /tasks/word-choice`
 - `POST /tasks/style`
+- `POST /context/build`
 - `POST /agent/sessions`
 - `GET /agent/sessions`
 - `GET /agent/sessions/{session_id}`
 - `DELETE /agent/sessions/{session_id}`
 - `GET /agent/sessions/{session_id}/messages`
+- `GET /agent/sessions/{session_id}/memory`
+- `PUT /agent/sessions/{session_id}/memory`
 - `POST /agent/sessions/{session_id}/messages`
 
 ### `prompts/`
@@ -304,8 +332,6 @@ uvicorn app.main:app --reload
 - 可选的选中文本与上下文
 - 可选的历史消息
 
-REPL 中通过 `/text` 附加选中文本。每次模型回复后，REPL 会把用户消息和 assistant 回复追加到本轮历史里。
-
 HTTP API 中的正式 agent 调用方式是 `/agent/sessions` 系列接口。它的基本流程是：
 
 ```text
@@ -314,6 +340,8 @@ POST /agent/sessions
 -> POST /agent/sessions/{session_id}/messages
 -> 后端读取历史、调用模型、保存用户消息和 assistant 回复
 ```
+
+session memory 是显式维护的会话级记忆。v1 中模型不会自动改写 memory，调用方需要通过 `PUT /agent/sessions/{session_id}/memory` 更新。每次 agent turn 都会读取当前 memory，并把文档摘要、写作目标、术语和用户偏好注入 prompt。
 
 agent 返回统一的 `TaskResponse`：
 
@@ -324,7 +352,7 @@ agent 返回统一的 `TaskResponse`：
 
 ## 推荐开发路线
 
-### 第一阶段：稳定 REPL 与 HTTP API 原型
+### 第一阶段：稳定 HTTP API 与 HTTP CLI 原型
 
 目标：
 

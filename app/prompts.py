@@ -76,6 +76,12 @@ Document title:
 Section heading:
 {context.section_heading or ""}
 
+Document id:
+{context.document_id or ""}
+
+Active scope:
+{context.active_scope or ""}
+
 User instruction:
 {request.instruction or ""}
 

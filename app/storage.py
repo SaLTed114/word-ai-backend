@@ -8,7 +8,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from app.models import AgentSession, AgentSessionMessage, TaskResponse
+from app.models import (
+    AgentSession,
+    AgentSessionMemory,
+    AgentSessionMemoryUpdate,
+    AgentSessionMessage,
+    TaskResponse,
+)
 
 
 DEFAULT_DB_PATH = Path("data") / "word_ai.sqlite3"
@@ -49,6 +55,20 @@ class AgentSessionStore:
                 """
                 CREATE INDEX IF NOT EXISTS idx_agent_messages_session_id
                 ON agent_messages(session_id, id)
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS agent_session_memory (
+                    session_id TEXT PRIMARY KEY,
+                    document_summary TEXT,
+                    writing_goals_json TEXT NOT NULL DEFAULT '[]',
+                    key_terms_json TEXT NOT NULL DEFAULT '[]',
+                    user_preferences_json TEXT NOT NULL DEFAULT '[]',
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES agent_sessions(id)
+                        ON DELETE CASCADE
+                )
                 """
             )
 
@@ -169,6 +189,77 @@ class AgentSessionStore:
             response=response,
         )
 
+    def get_memory(self, session_id: str) -> AgentSessionMemory:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    session_id,
+                    document_summary,
+                    writing_goals_json,
+                    key_terms_json,
+                    user_preferences_json,
+                    updated_at
+                FROM agent_session_memory
+                WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return AgentSessionMemory(session_id=session_id)
+        return _memory_from_row(row)
+
+    def upsert_memory(
+        self,
+        session_id: str,
+        update: AgentSessionMemoryUpdate,
+    ) -> AgentSessionMemory:
+        now = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_session_memory (
+                    session_id,
+                    document_summary,
+                    writing_goals_json,
+                    key_terms_json,
+                    user_preferences_json,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    document_summary = excluded.document_summary,
+                    writing_goals_json = excluded.writing_goals_json,
+                    key_terms_json = excluded.key_terms_json,
+                    user_preferences_json = excluded.user_preferences_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    session_id,
+                    update.document_summary,
+                    json.dumps(update.writing_goals, ensure_ascii=False),
+                    json.dumps(update.key_terms, ensure_ascii=False),
+                    json.dumps(update.user_preferences, ensure_ascii=False),
+                    now,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE agent_sessions
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                (now, session_id),
+            )
+        return AgentSessionMemory(
+            session_id=session_id,
+            document_summary=update.document_summary,
+            writing_goals=update.writing_goals,
+            key_terms=update.key_terms,
+            user_preferences=update.user_preferences,
+            updated_at=now,
+        )
+
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.db_path)
@@ -208,4 +299,15 @@ def _message_from_row(row: sqlite3.Row) -> AgentSessionMessage:
         content=row["content"],
         created_at=row["created_at"],
         response=response,
+    )
+
+
+def _memory_from_row(row: sqlite3.Row) -> AgentSessionMemory:
+    return AgentSessionMemory(
+        session_id=row["session_id"],
+        document_summary=row["document_summary"],
+        writing_goals=json.loads(row["writing_goals_json"]),
+        key_terms=json.loads(row["key_terms_json"]),
+        user_preferences=json.loads(row["user_preferences_json"]),
+        updated_at=row["updated_at"],
     )

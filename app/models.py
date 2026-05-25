@@ -29,6 +29,7 @@ ActionScope = Literal[
 ]
 TaskType = Literal["syntax", "word_choice", "style", "agent"]
 RiskLevel = Literal["info", "low", "medium", "high"]
+ContextScope = Literal["selection", "paragraph", "section", "document"]
 
 
 class TextContext(BaseModel):
@@ -36,6 +37,8 @@ class TextContext(BaseModel):
     after: str | None = Field(default=None, description="Text after the selected text.")
     document_title: str | None = None
     section_heading: str | None = None
+    document_id: str | None = None
+    active_scope: ContextScope | None = None
 
 
 class TextRequest(BaseModel):
@@ -134,9 +137,72 @@ class AgentSessionMessage(BaseModel):
     response: TaskResponse | None = None
 
 
+class AgentSessionMemory(BaseModel):
+    session_id: str
+    document_summary: str | None = None
+    writing_goals: list[str] = Field(default_factory=list)
+    key_terms: list[str] = Field(default_factory=list)
+    user_preferences: list[str] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
+class AgentSessionMemoryUpdate(BaseModel):
+    document_summary: str | None = None
+    writing_goals: list[str] = Field(default_factory=list)
+    key_terms: list[str] = Field(default_factory=list)
+    user_preferences: list[str] = Field(default_factory=list)
+
+
+class DocumentSelection(BaseModel):
+    text: str | None = Field(default=None, description="Selected text, if already known.")
+    start: int | None = Field(
+        default=None,
+        ge=0,
+        description="Selection start offset in document_text.",
+    )
+    end: int | None = Field(
+        default=None,
+        ge=0,
+        description="Selection end offset in document_text.",
+    )
+
+
+class DocumentContextRequest(BaseModel):
+    document_id: str | None = None
+    title: str | None = None
+    section_heading: str | None = None
+    document_text: str | None = Field(
+        default=None,
+        description="Plain text representation of the available document content.",
+    )
+    selection: DocumentSelection | None = None
+    active_scope: ContextScope = Field(
+        default="selection",
+        description="Scope the user intends to work on.",
+    )
+    context_window_chars: int = Field(
+        default=1200,
+        ge=0,
+        le=8000,
+        description="Maximum characters to keep before and after the active text.",
+    )
+    instruction: str | None = None
+    style: str | None = None
+
+
+class ContextBuildResult(BaseModel):
+    text_request: TextRequest
+    active_scope: ContextScope
+    selected_text: str
+    before_chars: int
+    after_chars: int
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AgentSessionTurnRequest(BaseModel):
     message: str
     selection: TextRequest | None = None
+    document_context: DocumentContextRequest | None = None
 
 
 class AgentSessionTurnResponse(BaseModel):

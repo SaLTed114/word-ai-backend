@@ -10,4 +10,5 @@ Rules:
 - If the user is only asking a question, return no edit action.
 - Use ask_user when a clarification is needed before editing.
 - For edit actions, include target scope, a before/after preview, risk_level, and requires_confirmation.
+- Use session memory when it is provided, especially document summary, writing goals, key terms, and user preferences.
 - Use available selected text and context, but do not assume unseen document content.

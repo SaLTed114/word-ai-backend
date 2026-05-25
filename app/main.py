@@ -8,13 +8,18 @@ from pydantic import ValidationError
 
 from app.ai_client import AIClient, AIClientError
 from app.config import AISettings
+from app.context_builder import build_text_request_from_document
 from app.models import (
     AgentMessage,
     AgentSession,
     AgentSessionCreateRequest,
+    AgentSessionMemory,
+    AgentSessionMemoryUpdate,
     AgentSessionMessage,
     AgentSessionTurnRequest,
     AgentSessionTurnResponse,
+    ContextBuildResult,
+    DocumentContextRequest,
     TaskResponse,
     TextRequest,
 )
@@ -97,6 +102,14 @@ async def style_task(
     return await _handle_task(run_style(client, request))
 
 
+@app.post("/context/build", response_model=ContextBuildResult)
+async def build_context(request: DocumentContextRequest) -> ContextBuildResult:
+    try:
+        return build_text_request_from_document(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/agent/sessions", response_model=AgentSession)
 async def create_agent_session(
     request: AgentSessionCreateRequest,
@@ -145,6 +158,25 @@ async def list_agent_session_messages(
     return store.list_messages(session_id=session_id, limit=limit)
 
 
+@app.get("/agent/sessions/{session_id}/memory", response_model=AgentSessionMemory)
+async def get_agent_session_memory(
+    session_id: str,
+    store: AgentSessionStore = Depends(get_session_store),
+) -> AgentSessionMemory:
+    _require_session(store, session_id)
+    return store.get_memory(session_id)
+
+
+@app.put("/agent/sessions/{session_id}/memory", response_model=AgentSessionMemory)
+async def update_agent_session_memory(
+    session_id: str,
+    request: AgentSessionMemoryUpdate,
+    store: AgentSessionStore = Depends(get_session_store),
+) -> AgentSessionMemory:
+    _require_session(store, session_id)
+    return store.upsert_memory(session_id, request)
+
+
 @app.post("/agent/sessions/{session_id}/messages", response_model=AgentSessionTurnResponse)
 async def create_agent_session_message(
     session_id: str,
@@ -153,8 +185,10 @@ async def create_agent_session_message(
     store: AgentSessionStore = Depends(get_session_store),
 ) -> AgentSessionTurnResponse:
     _require_session(store, session_id)
+    selection = _resolve_turn_selection(request)
     previous_messages = store.list_messages(session_id=session_id, limit=50)
     history = _to_agent_history(previous_messages)
+    memory = store.get_memory(session_id)
     user_message = store.add_message(
         session_id=session_id,
         role="user",
@@ -164,8 +198,9 @@ async def create_agent_session_message(
         run_agent_turn(
             client=client,
             message=request.message,
-            selection=request.selection,
+            selection=selection,
             history=history,
+            memory=memory,
         )
     )
     assistant_message = store.add_message(
@@ -194,6 +229,15 @@ async def _handle_task(coro) -> TaskResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail=exc.errors()) from exc
+
+
+def _resolve_turn_selection(request: AgentSessionTurnRequest) -> TextRequest | None:
+    if request.document_context is None:
+        return request.selection
+    try:
+        return build_text_request_from_document(request.document_context).text_request
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _require_session(store: AgentSessionStore, session_id: str) -> AgentSession:
