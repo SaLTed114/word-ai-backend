@@ -1,0 +1,56 @@
+{
+  "title": "academic rewrite follow-up",
+  "memory": {
+    "document_summary": "A draft methods section for a biomedical engineering report writing assistant.",
+    "writing_goals": [
+      "Use concise academic English.",
+      "Preserve scientific meaning.",
+      "Avoid vague evaluative wording."
+    ],
+    "key_terms": [
+      "biomedical engineering report",
+      "academic methods section",
+      "writing assistant"
+    ],
+    "user_preferences": [
+      "Explain issues in Chinese.",
+      "Provide rewrites in English."
+    ]
+  },
+  "document_context": {
+    "document_id": "scenario-academic-rewrite",
+    "title": "Draft Methods Section",
+    "section_heading": "Methods",
+    "document_text": "Title: Draft Methods Section\n\nThe proposed pipeline aims to support student writing in biomedical engineering reports.\n\nThis method is good and useful. It can help users revise grammar and style, but the current wording is too vague for an academic methods section.\n\nIn future work, the system should preserve domain terms and avoid changing the scientific meaning.",
+    "selection": {
+      "text": "This method is good and useful."
+    },
+    "active_scope": "selection",
+    "context_window_chars": 300,
+    "instruction": "Keep the final rewrite suitable for an academic methods section."
+  },
+  "turns": [
+    {
+      "user": "请解释选中句子的问题，并给出一个更正式、更适合学术论文方法部分的英文改写。",
+      "expect": {
+        "task": "agent",
+        "min_actions": 1,
+        "requires_final_text": true
+      }
+    },
+    {
+      "user": "基于刚才的解释，再给我一个更简洁的版本。",
+      "expect": {
+        "task": "agent",
+        "min_messages": 4
+      }
+    },
+    {
+      "user": "不要改变 scientific meaning，再给一个版本。",
+      "expect": {
+        "task": "agent",
+        "requires_action_schema": true
+      }
+    }
+  ]
+}

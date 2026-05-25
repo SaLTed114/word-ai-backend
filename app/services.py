@@ -38,7 +38,9 @@ async def run_agent_turn(
     sections.append(f"Latest user message:\n{message}")
     message = "\n\n".join(sections)
     prompt = build_agent_prompt(message, selection)
-    return await client.complete_task(prompt)
+    response = await client.complete_task(prompt)
+    response.task = "agent"
+    return response
 
 
 def _format_history(history) -> str:

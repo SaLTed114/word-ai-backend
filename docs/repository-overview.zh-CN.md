@@ -227,6 +227,30 @@ python .\scripts\test_agent_flow.py --mock
 
 脚本会创建临时 session，设置 session memory，发送带 `document_context` 的 agent 消息，读取消息历史，并在默认情况下删除测试 session。它适合用来检查 agent session、context builder、memory 和 structured action 是否能串起来。
 
+### `scripts/agent_scenario_test.py`
+
+JSON 场景驱动的多轮 agent 测试脚本。默认场景：
+
+```text
+tests/scenarios/academic_rewrite.zh-CN.json
+```
+
+运行方式：
+
+```powershell
+python .\scripts\agent_scenario_test.py
+python .\scripts\agent_scenario_test.py --mock
+```
+
+场景文件可以定义：
+
+- `memory`：会话记忆
+- `document_context`：文档全文、选区和作用范围
+- `turns`：多轮用户消息
+- `expect`：轻量检查，例如 `task`、`min_actions`、`requires_final_text`、`min_messages`
+
+这个脚本比单轮 flow test 更适合模拟“长期对话但不使用 LLM user”的测试方式。
+
 ### `app/main.py`
 
 FastAPI HTTP 服务入口。运行方式：
@@ -274,21 +298,23 @@ http://127.0.0.1:8000/docs
 
 ### `examples/simple-web/`
 
-一个不依赖 Node.js 或前端框架的静态网页 demo。它模拟未来 Word/WPS 插件的核心数据流：
+一个不依赖 Node.js 或前端框架的静态网页 demo。它模拟未来 Word/WPS 插件的核心 agent 数据流：
 
 ```text
-编辑器文本或选区 -> fetch 调用 HTTP API -> 展示 TaskResponse -> 应用 final_text/action
+文档文本或选区 -> document_context -> agent session -> 展示 TaskResponse -> 应用 action
 ```
 
 当前能力：
 
-- 作为 TXT 文本编辑器使用
+- 左侧作为 TXT 文本编辑器使用
+- 右侧作为 agent 对话面板使用
 - 打开和保存 `.txt`
-- 根据选区或全文调用后端
-- 调用 `syntax`、`word-choice`、`style`、`agent`
-- 将 `final_text` 或 `replace_selection` 应用回文本框
+- 自动创建后端 session
+- 发送 `document_context`
+- 设置和保存 session memory
+- 将 `replace_selection` action 应用回文本框
 
-这个 demo 的目的不是最终 UI，而是让前后端交互链路可视化。未来接入 Word/WPS 时，可以把 textarea 的读取和写回替换成文档 API，HTTP 调用逻辑保持基本不变。
+这个 demo 的目的不是最终 UI，而是让前后端交互链路可视化。未来接入 Word/WPS 时，可以把 textarea 的读取和写回替换成文档 API，session、memory 和 HTTP 调用逻辑保持基本不变。
 
 ### `scripts/start_demo.ps1` 与 `scripts/start_demo.bat`
 

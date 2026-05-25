@@ -144,6 +144,44 @@ The script tests:
 
 It uses a fixed methods-section paragraph, sets session memory, sends a Chinese agent instruction, and checks that the agent response contains structured output.
 
+## Agent Scenario Test
+
+Run the default multi-turn scenario:
+
+```powershell
+python .\scripts\agent_scenario_test.py
+```
+
+Run it without a real model call:
+
+```powershell
+python .\scripts\agent_scenario_test.py --mock
+```
+
+The default scenario lives at:
+
+```text
+tests/scenarios/academic_rewrite.zh-CN.json
+```
+
+Scenario files define session memory, document context, multiple user turns, and lightweight expectations such as required actions, final text, message count, and action schema.
+
+## Web Agent Demo
+
+Start the backend first:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+Then open:
+
+```text
+examples/simple-web/index.html
+```
+
+The demo has a document editor on the left and an agent chat panel on the right. It calls the session-based agent API, sends `document_context`, and lets you save session memory before chatting.
+
 ## HTTP API
 
 - `GET /health`: Check service and AI configuration status

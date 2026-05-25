@@ -144,6 +144,44 @@ python .\scripts\test_agent_flow.py --mock
 
 它使用固定的方法部分段落，设置 session memory，发送中文 agent 指令，并检查 agent 返回是否包含结构化结果。
 
+## Agent 场景测试
+
+运行默认多轮场景：
+
+```powershell
+python .\scripts\agent_scenario_test.py
+```
+
+如果不想真实调用模型，可以运行：
+
+```powershell
+python .\scripts\agent_scenario_test.py --mock
+```
+
+默认场景文件在：
+
+```text
+tests/scenarios/academic_rewrite.zh-CN.json
+```
+
+场景文件可以定义 session memory、document context、多轮用户消息，以及轻量 expect 检查，例如是否需要 actions、final_text、消息数量和 action schema。
+
+## 网页 Agent Demo
+
+先启动后端：
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+然后打开：
+
+```text
+examples/simple-web/index.html
+```
+
+这个 demo 左侧是文档编辑器，右侧是 agent 对话面板。它调用 session-based agent API，发送 `document_context`，并支持在对话前保存 session memory。
+
 ## HTTP API
 
 - `GET /health`：检查服务状态和 AI 配置状态
