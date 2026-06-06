@@ -203,10 +203,10 @@ class InstallerApp:
         shutil.copytree(self.source_dir, install_path)
         os.makedirs(data_path, exist_ok=True)
 
-        # Copy default .env if none exists
+        # Copy default .env from template if none exists
         env_file = data_path / ".env"
         if not env_file.exists():
-            default_env = install_path / "_internal" / ".env"
+            default_env = install_path / "_internal" / ".env.example"
             if default_env.exists():
                 shutil.copy(default_env, env_file)
 
@@ -219,19 +219,21 @@ class InstallerApp:
         self._set_registry("HKLM", f"SOFTWARE\\{APP_NAME}", "DataDir", str(data_path))
 
         # Registry: trust manifest for Word sideloading
-        manifest_dir = str(install_path / "addin")
-        if not os.path.exists(manifest_dir):
-            os.makedirs(manifest_dir, exist_ok=True)
-            # Copy manifest from source
-            for src in [install_path / "_internal" / "word-addin" / "manifest.xml",
-                        self.source_dir / "word-addin" / "manifest.xml"]:
-                if src.exists():
-                    shutil.copy(src, manifest_dir / "manifest.xml")
-                    break
-
-        wef_key = f"HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{APP_NAME}"
-        self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Address", manifest_dir)
+        guid = "6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9"
+        wef_key = f"HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{{{guid}}}"
+        self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Id", guid)
+        self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Url", "https://localhost:3443")
         self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Flags", "1", "REG_DWORD")
+        # Also copy manifest locally for fallback
+        addin_dir = install_path / "addin"
+        addin_dir.mkdir(parents=True, exist_ok=True)
+        for src in [
+            install_path / "_internal" / "word-addin" / "manifest.xml",
+            self.source_dir / "word-addin" / "manifest.xml",
+        ]:
+            if src.exists():
+                shutil.copy(src, addin_dir / "manifest.xml")
+                break
 
         # Trust SSL certificate
         cert_file = install_path / "_internal" / ".certs" / "localhost.pem"
@@ -304,7 +306,7 @@ rmdir /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\{APP_NAME}
 del /q "%PUBLIC%\\Desktop\\{APP_NAME}.lnk" 2>nul
 echo [*] Removing registry entries...
 reg delete "HKLM\\SOFTWARE\\{APP_NAME}" /f >nul 2>&1
-reg delete "HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{APP_NAME}" /f >nul 2>&1
+reg delete "HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{{6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9}}" /f >nul 2>&1
 echo [*] Removing SSL certificate...
 certutil -delstore "Root" "localhost" >nul 2>&1
 echo.
