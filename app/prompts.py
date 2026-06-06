@@ -12,13 +12,13 @@ PROMPT_DIR = PROJECT_ROOT / "prompts"
 RESPONSE_CONTRACT = """
 Return only valid JSON matching this schema:
 {
-  "task": "syntax | word_choice | style | agent",
+  "task": "syntax | word_choice | style | formula | agent",
   "reply": "short explanation shown to the user",
   "summary": "one sentence summary, or null",
   "actions": [
     {
       "id": "short stable id such as action_1",
-      "type": "replace_selection | replace_range | insert_before | insert_after | add_comment | highlight | ask_user | none",
+      "type": "replace_selection | replace_selection_equation | replace_range | insert_equation | insert_before | insert_after | add_comment | highlight | ask_user | none",
       "target": {
         "scope": "selection | range | paragraph | section | document | cursor | none",
         "start": null,
@@ -28,6 +28,8 @@ Return only valid JSON matching this schema:
       },
       "original": "text being changed, or null",
       "replacement": "replacement text, or null",
+      "formula": "formula source for equation actions, usually LaTeX, or null",
+      "formula_format": "latex | linear | omml, or null",
       "preview": {
         "before": "text before applying this action, or null",
         "after": "text after applying this action, or null"
@@ -42,6 +44,9 @@ Return only valid JSON matching this schema:
 }
 Rules for actions:
 - Use replace_selection for a complete selected-text rewrite.
+- Use replace_selection_equation when the selected text should become a Word equation.
+- Use insert_equation when the user asks you to insert a new formula at the cursor.
+- For equation actions, put the formula in formula as LaTeX when possible, set formula_format to latex, and keep replacement as a plain-text fallback.
 - Use replace_range only when start/end offsets inside the selected text are known.
 - Use add_comment for feedback that should not edit the document text.
 - Use ask_user when a clarification is needed before editing.

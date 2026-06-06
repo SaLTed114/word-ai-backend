@@ -1,18 +1,26 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp
   xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
-  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
   xsi:type="TaskPaneApp">
-  <Id>9bdf7247-bda3-4d70-8ef0-2d6d15bd860b</Id>
-  <Version>0.4.2.0</Version>
-  <ProviderName>Word AI Backend</ProviderName>
+  <Id>6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9</Id>
+  <Version>0.5.1.0</Version>
+  <ProviderName>Word AI</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Word AI Assistant"/>
-  <Description DefaultValue="AI writing assistant task pane backed by the local FastAPI service."/>
+  <DisplayName DefaultValue="Word AI Assistant">
+    <Override Locale="zh-CN" Value="Word AI &#21161;&#25163;"/>
+  </DisplayName>
+  <Description DefaultValue="AI writing assistant for Microsoft Word.">
+    <Override Locale="zh-CN" Value="Microsoft Word AI &#20889;&#20316;&#21161;&#25163;&#12290;"/>
+  </Description>
   <IconUrl DefaultValue="https://localhost:3443/assets/icon-32.png"/>
-  <SupportUrl DefaultValue="https://localhost:3443/taskpane.html"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3443/assets/icon-80.png"/>
+  <SupportUrl DefaultValue="https://localhost:3443/settings.html"/>
+  <AppDomains>
+    <AppDomain>https://localhost:3443</AppDomain>
+    <AppDomain>http://127.0.0.1:8000</AppDomain>
+  </AppDomains>
   <Hosts>
     <Host Name="Document"/>
   </Hosts>
@@ -20,7 +28,9 @@
     <SourceLocation DefaultValue="https://localhost:3443/taskpane.html"/>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
-  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+  <VersionOverrides
+    xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+    xsi:type="VersionOverridesV1_0">
     <Hosts>
       <Host xsi:type="Document">
         <DesktopFormFactor>
@@ -33,7 +43,7 @@
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <CustomTab id="WordAI.Tab">
               <Group id="WordAI.SyntaxGroup">
-                <Label resid="SyntaxGroup.Label"/>
+                <Label resid="Syntax.Label"/>
                 <Icon>
                   <bt:Image size="16" resid="Icon.16"/>
                   <bt:Image size="32" resid="Icon.32"/>
@@ -56,7 +66,7 @@
                 </Control>
               </Group>
               <Group id="WordAI.WordChoiceGroup">
-                <Label resid="WordChoiceGroup.Label"/>
+                <Label resid="WordChoice.Label"/>
                 <Icon>
                   <bt:Image size="16" resid="Icon.16"/>
                   <bt:Image size="32" resid="Icon.32"/>
@@ -79,7 +89,7 @@
                 </Control>
               </Group>
               <Group id="WordAI.RewriteGroup">
-                <Label resid="RewriteGroup.Label"/>
+                <Label resid="Rewrite.Label"/>
                 <Icon>
                   <bt:Image size="16" resid="Icon.16"/>
                   <bt:Image size="32" resid="Icon.32"/>
@@ -101,8 +111,31 @@
                   </Action>
                 </Control>
               </Group>
+              <Group id="WordAI.FormulaGroup">
+                <Label resid="Formula.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.Formula">
+                  <Label resid="Formula.Label"/>
+                  <Supertip>
+                    <Title resid="Formula.Label"/>
+                    <Description resid="Formula.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runFormula</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
               <Group id="WordAI.AgentGroup">
-                <Label resid="AgentGroup.Label"/>
+                <Label resid="Agent.Label"/>
                 <Icon>
                   <bt:Image size="16" resid="Icon.16"/>
                   <bt:Image size="32" resid="Icon.32"/>
@@ -120,13 +153,13 @@
                     <bt:Image size="80" resid="Icon.80"/>
                   </Icon>
                   <Action xsi:type="ShowTaskpane">
-                    <TaskpaneId>WordAI.AgentPane</TaskpaneId>
+                    <TaskpaneId>WordAI.Taskpane</TaskpaneId>
                     <SourceLocation resid="Taskpane.Url"/>
                   </Action>
                 </Control>
               </Group>
               <Group id="WordAI.SettingsGroup">
-                <Label resid="SettingsGroup.Label"/>
+                <Label resid="Settings.Label"/>
                 <Icon>
                   <bt:Image size="16" resid="Icon.16"/>
                   <bt:Image size="32" resid="Icon.32"/>
@@ -161,67 +194,55 @@
         <bt:Image id="Icon.80" DefaultValue="https://localhost:3443/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3443/taskpane.html"/>
-        <bt:Url id="Settings.Url" DefaultValue="https://localhost:3443/settings.html"/>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3443/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3443/taskpane.html"/>
         <bt:Url id="GetStarted.Url" DefaultValue="https://localhost:3443/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="Tab.Label" DefaultValue="Word AI">
-          <bt:Override Locale="zh-CN" Value="Word AI"/>
-        </bt:String>
-        <bt:String id="SyntaxGroup.Label" DefaultValue="Syntax">
-          <bt:Override Locale="zh-CN" Value="语法"/>
-        </bt:String>
-        <bt:String id="WordChoiceGroup.Label" DefaultValue="Choice">
-          <bt:Override Locale="zh-CN" Value="用词"/>
-        </bt:String>
-        <bt:String id="RewriteGroup.Label" DefaultValue="Rewrite">
-          <bt:Override Locale="zh-CN" Value="改写"/>
-        </bt:String>
-        <bt:String id="AgentGroup.Label" DefaultValue="Agent">
-          <bt:Override Locale="zh-CN" Value="助手"/>
-        </bt:String>
-        <bt:String id="SettingsGroup.Label" DefaultValue="Settings">
-          <bt:Override Locale="zh-CN" Value="设置"/>
-        </bt:String>
+        <bt:String id="Tab.Label" DefaultValue="Word AI"/>
         <bt:String id="Syntax.Label" DefaultValue="Syntax">
-          <bt:Override Locale="zh-CN" Value="语法"/>
+          <bt:Override Locale="zh-CN" Value="&#35821;&#27861;"/>
         </bt:String>
-        <bt:String id="WordChoice.Label" DefaultValue="Word Choice">
-          <bt:Override Locale="zh-CN" Value="用词"/>
+        <bt:String id="WordChoice.Label" DefaultValue="Words">
+          <bt:Override Locale="zh-CN" Value="&#29992;&#35789;"/>
         </bt:String>
         <bt:String id="Rewrite.Label" DefaultValue="Rewrite">
-          <bt:Override Locale="zh-CN" Value="改写"/>
+          <bt:Override Locale="zh-CN" Value="&#25913;&#20889;"/>
+        </bt:String>
+        <bt:String id="Formula.Label" DefaultValue="Formula">
+          <bt:Override Locale="zh-CN" Value="&#20844;&#24335;&#21270;"/>
         </bt:String>
         <bt:String id="Agent.Label" DefaultValue="Agent">
-          <bt:Override Locale="zh-CN" Value="助手"/>
+          <bt:Override Locale="zh-CN" Value="&#21161;&#25163;"/>
         </bt:String>
         <bt:String id="Settings.Label" DefaultValue="Settings">
-          <bt:Override Locale="zh-CN" Value="设置"/>
+          <bt:Override Locale="zh-CN" Value="&#35774;&#32622;"/>
         </bt:String>
-        <bt:String id="GetStarted.Title" DefaultValue="Word AI Assistant is ready">
-          <bt:Override Locale="zh-CN" Value="Word AI 助手已就绪"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Word AI Assistant">
+          <bt:Override Locale="zh-CN" Value="Word AI &#21161;&#25163;"/>
         </bt:String>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="Syntax.Tooltip" DefaultValue="Check the current selection and replace it with the AI result.">
-          <bt:Override Locale="zh-CN" Value="检查当前选区，并用 AI 结果直接替换。"/>
+        <bt:String id="Syntax.Tooltip" DefaultValue="Check grammar, spelling, punctuation, and clarity.">
+          <bt:Override Locale="zh-CN" Value="&#26816;&#26597;&#35821;&#27861;&#12289;&#25340;&#20889;&#12289;&#26631;&#28857;&#21644;&#34920;&#36798;&#28165;&#26224;&#24230;&#12290;"/>
         </bt:String>
-        <bt:String id="WordChoice.Tooltip" DefaultValue="Improve word choice for the current selection and replace it immediately.">
-          <bt:Override Locale="zh-CN" Value="优化当前选区的用词，并立即替换。"/>
+        <bt:String id="WordChoice.Tooltip" DefaultValue="Improve word choice in the selected text.">
+          <bt:Override Locale="zh-CN" Value="&#20248;&#21270;&#36873;&#20013;&#25991;&#26412;&#30340;&#29992;&#35789;&#12290;"/>
         </bt:String>
-        <bt:String id="Rewrite.Tooltip" DefaultValue="Rewrite the current selection in an academic style and replace it immediately.">
-          <bt:Override Locale="zh-CN" Value="将当前选区改写为学术风格，并立即替换。"/>
+        <bt:String id="Rewrite.Tooltip" DefaultValue="Rewrite the selected text in a polished style.">
+          <bt:Override Locale="zh-CN" Value="&#28070;&#33394;&#24182;&#25913;&#20889;&#36873;&#20013;&#25991;&#26412;&#12290;"/>
         </bt:String>
-        <bt:String id="Agent.Tooltip" DefaultValue="Open the conversation pane for agent chat and command results.">
-          <bt:Override Locale="zh-CN" Value="打开对话面板，查看助手聊天和命令结果。"/>
+        <bt:String id="Formula.Tooltip" DefaultValue="Convert the selected text into a Word equation.">
+          <bt:Override Locale="zh-CN" Value="&#23558;&#36873;&#20013;&#25991;&#23383;&#36716;&#25442;&#20026; Word &#20844;&#24335;&#12290;"/>
         </bt:String>
-        <bt:String id="Settings.Tooltip" DefaultValue="Show backend API settings and connection check.">
-          <bt:Override Locale="zh-CN" Value="显示后端 API 设置并检查连接状态。"/>
+        <bt:String id="Agent.Tooltip" DefaultValue="Open the AI agent task pane.">
+          <bt:Override Locale="zh-CN" Value="&#25171;&#24320; AI &#21161;&#25163;&#20391;&#36793;&#26639;&#12290;"/>
         </bt:String>
-        <bt:String id="GetStarted.Description" DefaultValue="Use the Word AI ribbon buttons for quick edits, or open Agent for conversation.">
-          <bt:Override Locale="zh-CN" Value="使用 Word AI 功能区按钮快速编辑，或打开助手进行对话。"/>
+        <bt:String id="Settings.Tooltip" DefaultValue="Open Word AI settings.">
+          <bt:Override Locale="zh-CN" Value="&#25171;&#24320; Word AI &#35774;&#32622;&#12290;"/>
+        </bt:String>
+        <bt:String id="GetStarted.Description" DefaultValue="Use the Word AI tab to revise text, convert formulas, and chat with the agent.">
+          <bt:Override Locale="zh-CN" Value="&#20351;&#29992; Word AI &#36873;&#39033;&#21345;&#28070;&#33394;&#25991;&#26412;&#12289;&#36716;&#25442;&#20844;&#24335;&#65292;&#24182;&#19982;&#21161;&#25163;&#23545;&#35805;&#12290;"/>
         </bt:String>
       </bt:LongStrings>
     </Resources>

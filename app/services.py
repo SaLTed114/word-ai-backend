@@ -20,6 +20,13 @@ async def run_style(client: AIClient, request: TextRequest) -> TaskResponse:
     return await client.complete_task(prompt)
 
 
+async def run_formula(client: AIClient, request: TextRequest) -> TaskResponse:
+    prompt = build_task_prompt("formula", request)
+    response = await client.complete_task(prompt)
+    response.task = "formula"
+    return response
+
+
 async def run_agent_turn(
     client: AIClient,
     message: str,

@@ -8,8 +8,10 @@ from pydantic import BaseModel, Field
 
 ActionType = Literal[
     "replace_selection",
+    "replace_selection_equation",
     "replace_range",
     "replace_span",
+    "insert_equation",
     "insert_before",
     "insert_after",
     "add_comment",
@@ -27,9 +29,10 @@ ActionScope = Literal[
     "cursor",
     "none",
 ]
-TaskType = Literal["syntax", "word_choice", "style", "agent"]
+TaskType = Literal["syntax", "word_choice", "style", "formula", "agent"]
 RiskLevel = Literal["info", "low", "medium", "high"]
 ContextScope = Literal["selection", "paragraph", "section", "document"]
+FormulaFormat = Literal["latex", "linear", "omml"]
 
 
 class TextContext(BaseModel):
@@ -85,6 +88,14 @@ class TextAction(BaseModel):
     target: ActionTarget = Field(default_factory=ActionTarget)
     original: str | None = None
     replacement: str | None = None
+    formula: str | None = Field(
+        default=None,
+        description="Formula source for equation actions, usually LaTeX.",
+    )
+    formula_format: FormulaFormat | None = Field(
+        default=None,
+        description="Format of formula source: latex, linear, or omml.",
+    )
     preview: ActionPreview | None = None
     reason: str | None = None
     risk_level: RiskLevel = Field(

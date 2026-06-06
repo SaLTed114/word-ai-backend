@@ -25,7 +25,7 @@ from app.models import (
     TaskResponse,
     TextRequest,
 )
-from app.services import run_agent_turn, run_style, run_syntax, run_word_choice
+from app.services import run_agent_turn, run_formula, run_style, run_syntax, run_word_choice
 from app.storage import AgentSessionStore
 
 
@@ -124,6 +124,14 @@ async def style_task(
     client: AIClient = Depends(get_client),
 ) -> TaskResponse:
     return await _handle_task(run_style(client, request))
+
+
+@app.post("/tasks/formula", response_model=TaskResponse)
+async def formula_task(
+    request: TextRequest,
+    client: AIClient = Depends(get_client),
+) -> TaskResponse:
+    return await _handle_task(run_formula(client, request))
 
 
 @app.post("/context/build", response_model=ContextBuildResult)

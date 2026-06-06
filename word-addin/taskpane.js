@@ -51,6 +51,7 @@
       enterMessage: "Enter an agent message.",
       applyResult: "Apply result",
       apply: "Apply",
+      applyEquation: "Apply formula",
       details: "Details",
       appliedSelection: "replaced selection",
       openFailed: "Failed to open session",
@@ -78,6 +79,7 @@
       enterMessage: "请输入消息。",
       applyResult: "应用结果",
       apply: "应用",
+      applyEquation: "应用公式",
       details: "详情",
       appliedSelection: "已替换选区",
       openFailed: "打开会话失败",
@@ -361,17 +363,26 @@
       message.appendChild(finalText);
     }
 
+    const formulaAction = getApplicableFormulaAction(result);
     const replacement = getApplicableText(result);
-    if (replacement) {
+    if (formulaAction || replacement) {
       const actionsRow = document.createElement("div");
       actionsRow.className = "message-actions";
       const applyButton = document.createElement("button");
       applyButton.type = "button";
-      applyButton.textContent = result.final_text ? t("applyResult") : t("apply");
+      applyButton.textContent = formulaAction
+        ? t("applyEquation")
+        : result.final_text
+        ? t("applyResult")
+        : t("apply");
       applyButton.addEventListener("click", async () => {
         try {
           const source = await currentReplaceSource();
-          await replaceCurrentText(source, replacement);
+          if (formulaAction) {
+            await applyEquationAction(source, formulaAction);
+          } else {
+            await replaceCurrentText(source, replacement);
+          }
           await refreshSelectionPreview();
         } catch (error) {
           showError(error.message || String(error));
@@ -422,9 +433,38 @@
     return result.final_text || (replaceAction && replaceAction.replacement) || null;
   }
 
+  function getApplicableFormulaAction(result) {
+    if (!result) {
+      return null;
+    }
+    return (result.actions || []).find((action) => {
+      return (
+        (action.type === "replace_selection_equation" || action.type === "insert_equation") &&
+        (action.formula || action.replacement)
+      );
+    }) || null;
+  }
+
   async function currentReplaceSource() {
     const payload = await getWordPayload();
     return payload.source;
+  }
+
+  async function applyEquationAction(source, action) {
+    const formula = action.formula || action.replacement || "";
+    const format = action.formula_format || "latex";
+    const ooxml = format === "omml" ? formula : formulaToOoxml(formula);
+
+    await Word.run(async (context) => {
+      if (action.type === "insert_equation") {
+        context.document.getSelection().insertOoxml(ooxml, Word.InsertLocation.after);
+      } else if (source === "document") {
+        context.document.body.insertOoxml(ooxml, Word.InsertLocation.replace);
+      } else {
+        context.document.getSelection().insertOoxml(ooxml, Word.InsertLocation.replace);
+      }
+      await context.sync();
+    });
   }
 
   async function replaceCurrentText(source, text) {
@@ -437,6 +477,231 @@
       await context.sync();
     });
   }
+
+  function formulaToOoxml(formula) {
+    const math = parseLatexFormula(formula);
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">
+  <pkg:part pkg:name="/_rels/.rels" pkg:contentType="application/vnd.openxmlformats-package.relationships+xml">
+    <pkg:xmlData>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+      </Relationships>
+    </pkg:xmlData>
+  </pkg:part>
+  <pkg:part pkg:name="/word/document.xml" pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">
+    <pkg:xmlData>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+        <w:body>
+          <w:p>
+            <m:oMathPara>
+              <m:oMath>${math}</m:oMath>
+            </m:oMathPara>
+          </w:p>
+        </w:body>
+      </w:document>
+    </pkg:xmlData>
+  </pkg:part>
+</pkg:package>`;
+  }
+
+  function parseLatexFormula(source) {
+    const parser = new FormulaParser(cleanFormulaSource(source));
+    return parser.parseGroup();
+  }
+
+  function cleanFormulaSource(source) {
+    return String(source || "")
+      .trim()
+      .replace(/^\$\$?/, "")
+      .replace(/\$\$?$/, "")
+      .replace(/^\\\(/, "")
+      .replace(/\\\)$/, "")
+      .trim();
+  }
+
+  function escapeXml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function mathRun(text) {
+    return `<m:r><m:t>${escapeXml(text)}</m:t></m:r>`;
+  }
+
+  class FormulaParser {
+    constructor(source) {
+      this.source = source;
+      this.index = 0;
+    }
+
+    parseGroup(stopChar) {
+      const nodes = [];
+      while (this.index < this.source.length) {
+        const char = this.source[this.index];
+        if (stopChar && char === stopChar) {
+          this.index += 1;
+          break;
+        }
+        if (char === "}") {
+          break;
+        }
+        nodes.push(this.parseAtom());
+      }
+      return nodes.join("");
+    }
+
+    parseAtom() {
+      this.skipSpaces();
+      let base = this.parseBase();
+      this.skipSpaces();
+
+      let sub = null;
+      let sup = null;
+      while (this.peek() === "_" || this.peek() === "^") {
+        const marker = this.source[this.index++];
+        const script = this.parseScript();
+        if (marker === "_") {
+          sub = script;
+        } else {
+          sup = script;
+        }
+        this.skipSpaces();
+      }
+
+      if (sub && sup) {
+        return `<m:sSubSup><m:e>${base}</m:e><m:sub>${sub}</m:sub><m:sup>${sup}</m:sup></m:sSubSup>`;
+      }
+      if (sub) {
+        return `<m:sSub><m:e>${base}</m:e><m:sub>${sub}</m:sub></m:sSub>`;
+      }
+      if (sup) {
+        return `<m:sSup><m:e>${base}</m:e><m:sup>${sup}</m:sup></m:sSup>`;
+      }
+      return base;
+    }
+
+    parseBase() {
+      const char = this.peek();
+      if (!char) {
+        return "";
+      }
+      if (char === "{") {
+        this.index += 1;
+        return this.parseGroup("}");
+      }
+      if (char === "\\") {
+        return this.parseCommand();
+      }
+      this.index += 1;
+      return mathRun(char);
+    }
+
+    parseCommand() {
+      this.index += 1;
+      const name = this.readCommandName();
+      if (name === "frac") {
+        const numerator = this.parseRequiredGroup();
+        const denominator = this.parseRequiredGroup();
+        return `<m:f><m:num>${numerator}</m:num><m:den>${denominator}</m:den></m:f>`;
+      }
+      if (name === "sqrt") {
+        const value = this.parseRequiredGroup();
+        return `<m:rad><m:radPr><m:degHide m:val="on"/></m:radPr><m:deg/><m:e>${value}</m:e></m:rad>`;
+      }
+      if (name === "left" || name === "right") {
+        this.skipSpaces();
+        const delimiter = this.source[this.index++] || "";
+        return delimiter === "." ? "" : mathRun(delimiter);
+      }
+      if (name === "cdot") {
+        return mathRun("·");
+      }
+      if (name === "times") {
+        return mathRun("×");
+      }
+      if (name === "leq") {
+        return mathRun("≤");
+      }
+      if (name === "geq") {
+        return mathRun("≥");
+      }
+      if (name === "neq") {
+        return mathRun("≠");
+      }
+      if (GREEK_LETTERS[name]) {
+        return mathRun(GREEK_LETTERS[name]);
+      }
+      return mathRun(`\\${name}`);
+    }
+
+    parseScript() {
+      this.skipSpaces();
+      if (this.peek() === "{") {
+        this.index += 1;
+        return this.parseGroup("}");
+      }
+      return this.parseBase();
+    }
+
+    parseRequiredGroup() {
+      this.skipSpaces();
+      if (this.peek() !== "{") {
+        return this.parseBase();
+      }
+      this.index += 1;
+      return this.parseGroup("}");
+    }
+
+    readCommandName() {
+      const start = this.index;
+      while (/[A-Za-z]/.test(this.source[this.index] || "")) {
+        this.index += 1;
+      }
+      if (start === this.index) {
+        return this.source[this.index++] || "";
+      }
+      return this.source.slice(start, this.index);
+    }
+
+    skipSpaces() {
+      while (/\s/.test(this.source[this.index] || "")) {
+        this.index += 1;
+      }
+    }
+
+    peek() {
+      return this.source[this.index];
+    }
+  }
+
+  const GREEK_LETTERS = {
+    alpha: "α",
+    beta: "β",
+    gamma: "γ",
+    delta: "δ",
+    epsilon: "ε",
+    theta: "θ",
+    lambda: "λ",
+    mu: "μ",
+    pi: "π",
+    rho: "ρ",
+    sigma: "σ",
+    tau: "τ",
+    phi: "φ",
+    omega: "ω",
+    Delta: "Δ",
+    Theta: "Θ",
+    Lambda: "Λ",
+    Pi: "Π",
+    Sigma: "Σ",
+    Phi: "Φ",
+    Omega: "Ω",
+  };
 
   function appendChat(role, content) {
     const message = document.createElement("div");
@@ -539,7 +804,8 @@
     });
     elements.agentInput.addEventListener("focus", refreshSelectionPreview);
     elements.agentInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
         runAgent();
       }
     });
