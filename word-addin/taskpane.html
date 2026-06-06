@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,10 +10,6 @@
 <body>
   <main class="pane">
     <header class="header">
-      <div>
-        <h1>Agent</h1>
-        <p id="hostStatus">Connecting to Word...</p>
-      </div>
       <span id="healthStatus" class="status-dot" title="Backend status"></span>
     </header>
 
@@ -21,6 +17,18 @@
       <strong id="scopeLabel">Selection auto-detected</strong>
       <pre id="selectedPreview">(Select text in Word, then ask the agent.)</pre>
     </section>
+
+    <details class="history-strip" open>
+      <summary id="historyTitle">History</summary>
+      <div class="history-body">
+        <select id="sessionSelect"></select>
+        <div class="history-actions">
+          <button id="openSessionButton" type="button">Open</button>
+          <button id="newSessionButton" type="button">New</button>
+          <button id="refreshSessionsButton" type="button">Refresh</button>
+        </div>
+      </div>
+    </details>
 
     <section class="chat-section">
       <div id="loading" class="loading" hidden>Processing...</div>
@@ -30,13 +38,15 @@
 
     <section class="composer">
       <textarea id="agentInput" rows="3" placeholder="Ask about the selected text or document."></textarea>
-      <div class="composer-actions">
-        <button id="resetAgentButton" type="button">Reset</button>
-        <button id="agentButton" class="primary-button" type="button">Send</button>
+      <div class="composer-actions composer-actions-wide">
+        <div class="composer-meta">
+          <button id="agentButton" class="primary-button" type="button">Send</button>
+        </div>
       </div>
     </section>
   </main>
 
+  <script src="./shared.js"></script>
   <script src="./taskpane.js"></script>
 </body>
 </html>

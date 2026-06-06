@@ -210,3 +210,23 @@ class AgentSessionTurnResponse(BaseModel):
     user_message: AgentSessionMessage
     assistant_message: AgentSessionMessage
     response: TaskResponse
+
+
+class AIConfigView(BaseModel):
+    api_key: str = ""
+    model: str = "gpt-4o-mini"
+    base_url: str = "https://api.openai.com/v1"
+    api_endpoint: str = ""
+    proxy_url: str = ""
+    trust_env: bool = False
+    use_json_mode: bool = True
+
+
+class AIConfigUpdate(BaseModel):
+    api_key: str = ""
+    model: str = "gpt-4o-mini"
+    base_url: str = "https://api.openai.com/v1"
+    api_endpoint: str = ""
+    proxy_url: str = ""
+    trust_env: bool = False
+    use_json_mode: bool = True

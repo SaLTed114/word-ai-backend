@@ -7,9 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from app.ai_client import AIClient, AIClientError
-from app.config import AISettings
+from app.config import AISettings, save_ai_settings
 from app.context_builder import build_text_request_from_document
 from app.models import (
+    AIConfigUpdate,
+    AIConfigView,
     AgentMessage,
     AgentSession,
     AgentSessionCreateRequest,
@@ -76,6 +78,28 @@ async def health() -> dict:
         "ai_configured": app.state.ai_client is not None,
         "config": settings.redacted(),
     }
+
+
+@app.get("/settings/ai-config", response_model=AIConfigView)
+async def get_ai_config() -> AIConfigView:
+    settings: AISettings = app.state.settings
+    return AIConfigView(**settings.editable())
+
+
+@app.put("/settings/ai-config", response_model=AIConfigView)
+async def update_ai_config(request: AIConfigUpdate) -> AIConfigView:
+    settings = save_ai_settings(
+        api_key=request.api_key,
+        model=request.model,
+        base_url=request.base_url,
+        api_endpoint=request.api_endpoint,
+        proxy_url=request.proxy_url,
+        trust_env=request.trust_env,
+        use_json_mode=request.use_json_mode,
+    )
+    app.state.settings = settings
+    app.state.ai_client = AIClient(settings) if settings.is_ready() else None
+    return AIConfigView(**settings.editable())
 
 
 @app.post("/tasks/syntax", response_model=TaskResponse)
@@ -184,9 +208,11 @@ async def create_agent_session_message(
     client: AIClient = Depends(get_client),
     store: AgentSessionStore = Depends(get_session_store),
 ) -> AgentSessionTurnResponse:
-    _require_session(store, session_id)
+    session = _require_session(store, session_id)
     selection = _resolve_turn_selection(request)
     previous_messages = store.list_messages(session_id=session_id, limit=50)
+    if not previous_messages and _needs_generated_title(session.title):
+        store.update_session_title(session_id, _derive_session_title(request.message))
     history = _to_agent_history(previous_messages)
     memory = store.get_memory(session_id)
     user_message = store.add_message(
@@ -253,3 +279,17 @@ def _to_agent_history(messages: list[AgentSessionMessage]) -> list[AgentMessage]
         for message in messages
         if message.role in {"user", "assistant", "system"}
     ]
+
+
+def _needs_generated_title(title: str | None) -> bool:
+    if title is None:
+        return True
+    return title.strip().lower() in {"", "word-addin", "cli", "session"}
+
+
+def _derive_session_title(message: str) -> str:
+    compact = " ".join(message.split())
+    if not compact:
+        return "Session"
+    limit = 24
+    return compact if len(compact) <= limit else f"{compact[:limit].rstrip()}..."

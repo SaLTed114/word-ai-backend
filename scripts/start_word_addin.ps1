@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $AddinRoot = Join-Path $ProjectRoot "word-addin"
 $ManifestPath = Join-Path $AddinRoot "manifest.xml"
-$TaskpaneUrl = "http://localhost:3000/taskpane.html"
+$AddinUrl = "https://localhost:3443/taskpane.html"
 $SettingsUrl = "https://localhost:3443/settings.html"
 $ApiUrl = "http://127.0.0.1:8000"
 $CondaEnv = "wordplugin"
@@ -79,8 +79,7 @@ $EscapedAddinRoot = $AddinRoot.Replace("'", "''")
 $EscapedCertPath = $CertPath.Replace("'", "''")
 $EscapedKeyPath = $KeyPath.Replace("'", "''")
 $ApiCommand = "Set-Location -LiteralPath '$EscapedProjectRoot'; $PythonPrefix -m uvicorn app.main:app --reload"
-$AddinCommand = "Set-Location -LiteralPath '$EscapedAddinRoot'; python -m http.server 3000"
-$SettingsCommand = "Set-Location -LiteralPath '$EscapedProjectRoot'; python scripts\https_static_server.py --directory '$EscapedAddinRoot' --port 3443 --cert '$EscapedCertPath' --key '$EscapedKeyPath'"
+$AddinCommand = "Set-Location -LiteralPath '$EscapedProjectRoot'; python scripts\https_static_server.py --directory '$EscapedAddinRoot' --port 3443 --cert '$EscapedCertPath' --key '$EscapedKeyPath'"
 
 Write-Host "Starting API server at $ApiUrl ..."
 Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
@@ -91,7 +90,7 @@ Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
     $ApiCommand
 )
 
-Write-Host "Starting add-in static server at $TaskpaneUrl ..."
+Write-Host "Starting add-in HTTPS server at $AddinUrl ..."
 Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
     "-NoProfile",
     "-ExecutionPolicy",
@@ -100,23 +99,14 @@ Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
     $AddinCommand
 )
 
-Write-Host "Starting HTTPS settings server at $SettingsUrl ..."
-Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    $SettingsCommand
-)
-
 Start-Sleep -Seconds 2
 
 Write-Host ""
 Write-Host "Manifest:"
 Write-Host "  $ManifestPath"
 Write-Host ""
-Write-Host "Task pane URL:"
-Write-Host "  $TaskpaneUrl"
+Write-Host "Add-in URL:"
+Write-Host "  $AddinUrl"
 Write-Host ""
 Write-Host "Settings URL:"
 Write-Host "  $SettingsUrl"

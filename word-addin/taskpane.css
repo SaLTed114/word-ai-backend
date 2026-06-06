@@ -1,5 +1,6 @@
 :root {
   color-scheme: light;
+  --font-size: 14px;
   --bg: #f7f8fa;
   --surface: #ffffff;
   --surface-muted: #eef3f7;
@@ -23,10 +24,12 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
+  font-size: var(--font-size);
 }
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -51,7 +54,7 @@ button:disabled {
   opacity: 0.55;
 }
 
-input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -61,7 +64,7 @@ textarea {
   outline: none;
 }
 
-input {
+select {
   height: 34px;
   padding: 0 9px;
 }
@@ -73,7 +76,7 @@ textarea {
   resize: vertical;
 }
 
-input:focus,
+select:focus,
 textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(18, 108, 120, 0.12);
@@ -91,20 +94,9 @@ textarea:focus {
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-
-.header h1 {
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.header p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 12px;
+  min-height: 12px;
 }
 
 .status-dot {
@@ -123,7 +115,12 @@ textarea:focus {
   background: var(--danger);
 }
 
+.status-dot.busy {
+  background: var(--accent);
+}
+
 .selection-strip,
+.history-strip,
 .chat-section,
 .composer {
   border: 1px solid var(--border);
@@ -131,15 +128,38 @@ textarea:focus {
   background: var(--surface);
 }
 
-.selection-strip {
+.selection-strip,
+.history-strip,
+.composer {
   flex: 0 0 auto;
   padding: 8px;
 }
 
-.selection-strip strong {
+.selection-strip strong,
+.history-strip summary {
   display: block;
   margin-bottom: 6px;
   font-size: 12px;
+}
+
+.history-strip summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.history-strip summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-body {
+  display: grid;
+  gap: 8px;
+}
+
+.history-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 #selectedPreview {
@@ -201,6 +221,30 @@ textarea:focus {
   line-height: 1.45;
 }
 
+.message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.details-box {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.details-box summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.details-box pre {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .loading {
   padding: 8px;
   border-radius: 6px;
@@ -219,16 +263,39 @@ textarea:focus {
   white-space: pre-wrap;
 }
 
-.composer {
-  flex: 0 0 auto;
-  padding: 8px;
-}
-
 .composer-actions {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
   gap: 8px;
   margin-top: 8px;
+}
+
+.composer-actions-wide {
+  align-items: center;
+}
+
+.composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.composer-actions > button,
+.composer-meta > button {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 420px) {
+  .composer-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-meta {
+    width: 100%;
+  }
 }
 
 .primary-button {

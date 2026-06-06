@@ -3,14 +3,25 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = PROJECT_ROOT / ".env"
+AI_ENV_KEYS = (
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENAI_BASE_URL",
+    "OPENAI_API_ENDPOINT",
+    "OPENAI_PROXY_URL",
+    "OPENAI_TRUST_ENV",
+    "OPENAI_USE_JSON_MODE",
+)
 
 
-def load_dotenv(path: Path | None = None) -> None:
+def load_dotenv(path: Path | None = None, override: bool = False) -> None:
     """Load simple KEY=VALUE lines from .env without adding a dependency."""
-    env_path = path or PROJECT_ROOT / ".env"
+    env_path = path or ENV_PATH
     if not env_path.exists():
         return
 
@@ -21,7 +32,66 @@ def load_dotenv(path: Path | None = None) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+        if override or key not in os.environ:
+            os.environ[key] = value
+
+
+def _parse_bool(value: str | None, default: bool) -> bool:
+    if value is None or value == "":
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _stringify_bool(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def read_env_values(path: Path | None = None) -> dict[str, str]:
+    env_path = path or ENV_PATH
+    values: dict[str, str] = {}
+    if not env_path.exists():
+        return values
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def update_env_values(updates: Mapping[str, str], path: Path | None = None) -> None:
+    env_path = path or ENV_PATH
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    remaining = dict(updates)
+    output: list[str] = []
+
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in raw_line:
+            output.append(raw_line)
+            continue
+
+        key, _ = raw_line.split("=", 1)
+        normalized_key = key.strip()
+        if normalized_key in remaining:
+            output.append(f"{normalized_key}={remaining.pop(normalized_key)}")
+        else:
+            output.append(raw_line)
+
+    if output and output[-1].strip():
+        output.append("")
+
+    for key in AI_ENV_KEYS:
+        if key in remaining:
+            output.append(f"{key}={remaining.pop(key)}")
+
+    for key, value in remaining.items():
+        output.append(f"{key}={value}")
+
+    env_path.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
+    load_dotenv(env_path, override=True)
 
 
 @dataclass
@@ -36,17 +106,15 @@ class AISettings:
 
     @classmethod
     def from_env(cls) -> "AISettings":
-        load_dotenv()
-        use_json_mode = os.getenv("OPENAI_USE_JSON_MODE", "true").lower()
-        trust_env = os.getenv("OPENAI_TRUST_ENV", "false").lower()
+        load_dotenv(override=True)
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             api_endpoint=os.getenv("OPENAI_API_ENDPOINT") or None,
             proxy_url=os.getenv("OPENAI_PROXY_URL") or None,
-            trust_env=trust_env in {"1", "true", "yes"},
-            use_json_mode=use_json_mode not in {"0", "false", "no"},
+            trust_env=_parse_bool(os.getenv("OPENAI_TRUST_ENV"), False),
+            use_json_mode=_parse_bool(os.getenv("OPENAI_USE_JSON_MODE"), True),
         )
 
     def is_ready(self) -> bool:
@@ -63,3 +131,38 @@ class AISettings:
             "trust_env": self.trust_env,
             "use_json_mode": self.use_json_mode,
         }
+
+    def editable(self) -> dict[str, str | bool]:
+        return {
+            "api_key": self.api_key,
+            "model": self.model,
+            "base_url": self.base_url,
+            "api_endpoint": self.api_endpoint or "",
+            "proxy_url": self.proxy_url or "",
+            "trust_env": self.trust_env,
+            "use_json_mode": self.use_json_mode,
+        }
+
+
+def save_ai_settings(
+    *,
+    api_key: str,
+    model: str,
+    base_url: str,
+    api_endpoint: str | None = None,
+    proxy_url: str | None = None,
+    trust_env: bool = False,
+    use_json_mode: bool = True,
+) -> AISettings:
+    update_env_values(
+        {
+            "OPENAI_API_KEY": api_key.strip(),
+            "OPENAI_MODEL": model.strip(),
+            "OPENAI_BASE_URL": base_url.strip(),
+            "OPENAI_API_ENDPOINT": (api_endpoint or "").strip(),
+            "OPENAI_PROXY_URL": (proxy_url or "").strip(),
+            "OPENAI_TRUST_ENV": _stringify_bool(trust_env),
+            "OPENAI_USE_JSON_MODE": _stringify_bool(use_json_mode),
+        }
+    )
+    return AISettings.from_env()

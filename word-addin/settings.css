@@ -1,14 +1,16 @@
 :root {
   color-scheme: light;
-  --bg: #f7f8fa;
-  --surface: #ffffff;
-  --border: #cfd8e3;
-  --text: #1f2933;
-  --muted: #627282;
-  --accent: #126c78;
-  --danger: #b42318;
-  --danger-bg: #fff1f0;
-  --success: #287a45;
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-border: #d9dee6;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --success: #166534;
+  --success-soft: #dcfce7;
+  --warn: #92400e;
+  --warn-soft: #fef3c7;
 }
 
 * {
@@ -17,89 +19,175 @@
 
 body {
   margin: 0;
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
   background: var(--bg);
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
-.settings-shell {
-  display: grid;
-  gap: 12px;
+.page {
   padding: 16px;
 }
 
-header {
+.panel {
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.panel-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
 }
 
 h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 600;
 }
 
-label {
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
   color: var(--muted);
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
   font-size: 12px;
+  background: #eef2f7;
+  color: var(--muted);
 }
 
-.api-row {
+.status-pill[data-state="saved"] {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-pill[data-state="warning"] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-input,
-button {
-  height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font: inherit;
-}
-
-input {
-  min-width: 0;
-  padding: 0 9px;
-}
-
-button {
-  padding: 0 12px;
-  background: var(--surface);
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.status-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #98a5b3;
-}
-
-.status-dot.ok {
-  background: var(--success);
-}
-
-.status-dot.error {
-  background: var(--danger);
-}
-
-.message-box {
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  white-space: pre-wrap;
+.field,
+.check-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   font-size: 13px;
 }
 
-.message-box.error {
-  border-color: #ffb4ad;
-  background: var(--danger-bg);
-  color: var(--danger);
+.field-full {
+  grid-column: 1 / -1;
+}
+
+input[type="text"],
+input[type="password"],
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.fold {
+  margin-top: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold-body {
+  padding: 0 14px 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.check-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font: inherit;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.message {
+  min-height: 20px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 14px;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions button {
+    width: 100%;
+  }
 }

@@ -1,27 +1,126 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Word AI Settings</title>
-  <link rel="stylesheet" href="./settings.css">
-</head>
-<body>
-  <main class="settings-shell">
-    <header>
-      <h1>Settings</h1>
-      <span id="healthStatus" class="status-dot" title="Backend status"></span>
-    </header>
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Word AI Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h1 data-i18n="settingsTitle">设置</h1>
+            <p class="subtitle" data-i18n="settingsSubtitle">调整界面、记忆与模型配置。</p>
+          </div>
+          <span class="status-pill" id="statusPill" data-state="idle" data-i18n="statusIdle">未保存</span>
+        </div>
 
-    <label for="apiBase">Backend API</label>
-    <div class="api-row">
-      <input id="apiBase" type="url" value="http://127.0.0.1:8000" spellcheck="false">
-      <button id="healthButton" type="button">Check</button>
-    </div>
+        <div class="form-grid">
+          <label class="field">
+            <span data-i18n="languageLabel">界面语言</span>
+            <select id="language">
+              <option value="zh-CN">中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
 
-    <div id="messageBox" class="message-box" hidden></div>
-  </main>
+          <label class="field">
+            <span data-i18n="fontSizeLabel">Agent 字体大小</span>
+            <select id="fontSize">
+              <option value="12">12 px</option>
+              <option value="13">13 px</option>
+              <option value="14">14 px</option>
+              <option value="15">15 px</option>
+              <option value="16">16 px</option>
+              <option value="18">18 px</option>
+            </select>
+          </label>
 
-  <script src="./settings.js"></script>
-</body>
+          <label class="field field-full">
+            <span data-i18n="apiBaseLabel">后端 API</span>
+            <input id="apiBase" type="text" placeholder="http://127.0.0.1:8000" />
+          </label>
+        </div>
+
+        <details class="fold" id="memoryFold">
+          <summary data-i18n="memoryTitle">记忆</summary>
+          <div class="fold-body">
+            <label class="field">
+              <span data-i18n="documentSummaryLabel">Document summary</span>
+              <textarea id="documentSummary" rows="4"></textarea>
+            </label>
+
+            <label class="field">
+              <span data-i18n="writingGoalsLabel">Writing goals</span>
+              <textarea id="writingGoals" rows="3"></textarea>
+            </label>
+
+            <label class="field">
+              <span data-i18n="keyTermsLabel">Key terms</span>
+              <textarea id="keyTerms" rows="3"></textarea>
+            </label>
+
+            <label class="field">
+              <span data-i18n="userPreferencesLabel">User preferences</span>
+              <textarea id="userPreferences" rows="3"></textarea>
+            </label>
+          </div>
+        </details>
+
+        <details class="fold" id="aiConfigFold" open>
+          <summary data-i18n="aiConfigTitle">模型配置</summary>
+          <div class="fold-body">
+            <div class="form-grid">
+              <label class="field field-full">
+                <span>OPENAI_API_KEY</span>
+                <input id="openaiApiKey" type="password" autocomplete="off" />
+              </label>
+
+              <label class="field">
+                <span>OPENAI_MODEL</span>
+                <input id="openaiModel" type="text" />
+              </label>
+
+              <label class="field">
+                <span>OPENAI_BASE_URL</span>
+                <input id="openaiBaseUrl" type="text" />
+              </label>
+
+              <label class="field field-full">
+                <span>OPENAI_API_ENDPOINT</span>
+                <input id="openaiApiEndpoint" type="text" />
+              </label>
+
+              <label class="field field-full">
+                <span>OPENAI_PROXY_URL</span>
+                <input id="openaiProxyUrl" type="text" />
+              </label>
+
+              <label class="check-field">
+                <input id="openaiTrustEnv" type="checkbox" />
+                <span>OPENAI_TRUST_ENV</span>
+              </label>
+
+              <label class="check-field">
+                <input id="openaiUseJsonMode" type="checkbox" />
+                <span>OPENAI_USE_JSON_MODE</span>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button id="checkButton" class="ghost" type="button" data-i18n="checkButton">检查连接</button>
+          <button id="saveButton" type="button" data-i18n="saveButton">保存设置</button>
+        </div>
+
+        <p id="message" class="message" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script src="./settings.js"></script>
+  </body>
 </html>

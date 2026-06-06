@@ -1,5 +1,39 @@
-const API_BASE = "http://127.0.0.1:8000";
 const EVENT_KEY = "wordAiEvents";
+const SETTINGS_PAGE_URL = "https://localhost:3443/settings.html?v=20260606-2";
+
+const translations = {
+  en: {
+    syntax: "Syntax",
+    wordChoice: "Word Choice",
+    rewrite: "Rewrite",
+    settings: "Settings",
+    selectTextFirst: "Select text or add text to the document first.",
+    running: "Running {title}..."
+  },
+  "zh-CN": {
+    syntax: "\u8bed\u6cd5",
+    wordChoice: "\u7528\u8bcd",
+    rewrite: "\u6539\u5199",
+    settings: "\u8bbe\u7f6e",
+    selectTextFirst: "\u8bf7\u5148\u9009\u4e2d\u6587\u672c\uff0c\u6216\u5148\u5728\u6587\u6863\u4e2d\u8f93\u5165\u5185\u5bb9\u3002",
+    running: "\u6b63\u5728\u6267\u884c {title}..."
+  }
+};
+
+function getSettings() {
+  return typeof readWordAiSettings === "function"
+    ? readWordAiSettings()
+    : { apiBase: "http://127.0.0.1:8000", language: "en" };
+}
+
+function translate(key, values = {}) {
+  const settings = getSettings();
+  const dictionary = translations[settings.language] || translations.en;
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replace(`{${name}}`, String(value)),
+    dictionary[key] || key
+  );
+}
 
 Office.onReady(() => {
   Office.actions.associate("runSyntax", runSyntax);
@@ -10,21 +44,21 @@ Office.onReady(() => {
 
 async function runSyntax(event) {
   await runRibbonTask(event, {
-    title: "Syntax",
+    title: translate("syntax"),
     path: "/tasks/syntax"
   });
 }
 
 async function runWordChoice(event) {
   await runRibbonTask(event, {
-    title: "Word Choice",
+    title: translate("wordChoice"),
     path: "/tasks/word-choice"
   });
 }
 
 async function runRewrite(event) {
   await runRibbonTask(event, {
-    title: "Rewrite",
+    title: translate("rewrite"),
     path: "/tasks/style",
     extra: { style: "academic" }
   });
@@ -32,7 +66,7 @@ async function runRewrite(event) {
 
 function openSettings(event) {
   Office.context.ui.displayDialogAsync(
-    "https://localhost:3443/settings.html",
+    SETTINGS_PAGE_URL,
     {
       height: 42,
       width: 38,
@@ -43,7 +77,7 @@ function openSettings(event) {
         publishEvent({
           id: createId(),
           status: "error",
-          title: "Settings",
+          title: translate("settings"),
           message: asyncResult.error.message
         });
       }
@@ -56,14 +90,14 @@ async function runRibbonTask(event, task) {
   try {
     const payload = await getWordPayload();
     if (!payload.text.trim()) {
-      throw new Error("Select text or add text to the document first.");
+      throw new Error(translate("selectTextFirst"));
     }
 
     publishEvent({
       id: createId(),
       status: "started",
       title: task.title,
-      message: `Running ${task.title}...`
+      message: translate("running", { title: task.title })
     });
 
     const result = await requestJson(task.path, {
@@ -135,7 +169,7 @@ function getContextWindow(bodyText, selectedText) {
 }
 
 async function requestJson(path, payload) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getSettings().apiBase.replace(/\/$/, "")}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"

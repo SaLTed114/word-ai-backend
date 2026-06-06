@@ -1,313 +1,576 @@
-const EVENT_KEY = "wordAiEvents";
+(function () {
+  const EVENT_KEY = "wordAiEvents";
+  const shared = window.WordAIShared;
 
-const state = {
-  agentHistory: [],
-  officeReady: false,
-  lastEventIds: new Set()
-};
-
-const elements = {
-  hostStatus: document.getElementById("hostStatus"),
-  healthStatus: document.getElementById("healthStatus"),
-  scopeLabel: document.getElementById("scopeLabel"),
-  selectedPreview: document.getElementById("selectedPreview"),
-  chatLog: document.getElementById("chatLog"),
-  agentInput: document.getElementById("agentInput"),
-  agentButton: document.getElementById("agentButton"),
-  resetAgentButton: document.getElementById("resetAgentButton"),
-  loading: document.getElementById("loading"),
-  errorBox: document.getElementById("errorBox")
-};
-
-const channel = "BroadcastChannel" in window ? new BroadcastChannel("word-ai") : null;
-
-Office.onReady((info) => {
-  state.officeReady = info.host === Office.HostType.Word;
-  elements.hostStatus.textContent = state.officeReady
-    ? "Connected to Word"
-    : "Open this pane inside Microsoft Word.";
-  setBusy(false);
-  refreshSelectionPreview();
-  hydrateCommandEvents();
-  checkHealth();
-});
-
-if (channel) {
-  channel.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "word-ai-event") {
-      renderCommandEvent(event.data.payload);
-    }
-  });
-}
-
-window.addEventListener("storage", (event) => {
-  if (event.key === EVENT_KEY) {
-    hydrateCommandEvents();
-  }
-});
-
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    refreshSelectionPreview();
-    hydrateCommandEvents();
-  }
-});
-
-function setBusy(isBusy) {
-  elements.loading.hidden = !isBusy;
-  elements.agentButton.disabled = isBusy || !state.officeReady;
-}
-
-function showError(message) {
-  elements.errorBox.hidden = !message;
-  elements.errorBox.textContent = message || "";
-}
-
-async function getWordPayload() {
-  if (!state.officeReady) {
-    throw new Error("This task pane is not connected to Word.");
-  }
-
-  return Word.run(async (context) => {
-    const selection = context.document.getSelection();
-    const body = context.document.body;
-    selection.load("text");
-    body.load("text");
-    await context.sync();
-
-    const selectedText = selection.text || "";
-    const bodyText = body.text || "";
-    const hasSelection = selectedText.trim().length > 0;
-    const text = hasSelection ? selectedText : bodyText;
-
-    return {
-      text,
-      context: getContextWindow(bodyText, selectedText),
-      source: hasSelection ? "selection" : "document"
-    };
-  });
-}
-
-function getContextWindow(bodyText, selectedText) {
-  if (!selectedText) {
-    return { before: "", after: "" };
-  }
-
-  const index = bodyText.indexOf(selectedText);
-  if (index < 0) {
-    return { before: "", after: "" };
-  }
-
-  return {
-    before: bodyText.slice(Math.max(0, index - 500), index),
-    after: bodyText.slice(index + selectedText.length, index + selectedText.length + 500)
+  const state = {
+    officeReady: false,
+    currentSessionId: null,
+    lastEventIds: new Set(),
+    sending: false,
+    historyLoaded: false,
   };
-}
 
-async function refreshSelectionPreview() {
-  if (!state.officeReady) {
-    return;
+  const elements = {
+    healthStatus: document.getElementById("healthStatus"),
+    scopeLabel: document.getElementById("scopeLabel"),
+    selectedPreview: document.getElementById("selectedPreview"),
+    sessionSelect: document.getElementById("sessionSelect"),
+    openSessionButton: document.getElementById("openSessionButton"),
+    newSessionButton: document.getElementById("newSessionButton"),
+    refreshSessionsButton: document.getElementById("refreshSessionsButton"),
+    chatLog: document.getElementById("chatLog"),
+    agentInput: document.getElementById("agentInput"),
+    agentButton: document.getElementById("agentButton"),
+    loading: document.getElementById("loading"),
+    errorBox: document.getElementById("errorBox"),
+    historyTitle: document.getElementById("historyTitle"),
+  };
+
+  const channel = "BroadcastChannel" in window ? new BroadcastChannel("word-ai") : null;
+
+  const copy = {
+    en: {
+      title: "Agent",
+      connecting: "Connecting to Word...",
+      connected: "Connected to Word",
+      outsideWord: "Open this pane inside Microsoft Word.",
+      history: "History",
+      open: "Open",
+      refresh: "Refresh",
+      send: "Send",
+      newSession: "New",
+      selectionAuto: "Selection auto-detected",
+      currentSelection: "Current selection",
+      fullDocument: "Full document",
+      selectHint: "(Select text in Word, then ask the agent.)",
+      placeholder: "Ask about the selected text or document.",
+      processing: "Processing...",
+      backendReady: "Backend connected.",
+      backendRetry: "Backend unavailable. Sending will retry the connection.",
+      emptyHistory: "No saved sessions",
+      enterMessage: "Enter an agent message.",
+      applyResult: "Apply result",
+      apply: "Apply",
+      details: "Details",
+      appliedSelection: "replaced selection",
+      openFailed: "Failed to open session",
+      loadHistoryFailed: "Failed to load history",
+    },
+    "zh-CN": {
+      title: "Agent",
+      connecting: "正在连接 Word...",
+      connected: "已连接到 Word",
+      outsideWord: "请在 Microsoft Word 中打开此侧边栏。",
+      history: "历史会话",
+      open: "打开",
+      refresh: "刷新",
+      send: "发送",
+      newSession: "新会话",
+      selectionAuto: "已自动识别选区",
+      currentSelection: "当前选区",
+      fullDocument: "全文",
+      selectHint: "（请先在 Word 中选中文字，再向助手提问。）",
+      placeholder: "询问选中文本或整篇文档。",
+      processing: "处理中...",
+      backendReady: "后端已连接。",
+      backendRetry: "后端暂不可用，发送时会再次尝试。",
+      emptyHistory: "暂无历史会话",
+      enterMessage: "请输入消息。",
+      applyResult: "应用结果",
+      apply: "应用",
+      details: "详情",
+      appliedSelection: "已替换选区",
+      openFailed: "打开会话失败",
+      loadHistoryFailed: "加载历史失败",
+    },
+  };
+
+  function settings() {
+    return shared.loadSettings();
   }
 
-  try {
-    const payload = await getWordPayload();
-    const label = payload.source === "selection" ? "Current selection" : "Full document";
-    elements.scopeLabel.textContent = `${label} (${payload.text.length} chars)`;
-    elements.selectedPreview.textContent = payload.text || "(empty)";
-  } catch (error) {
-    showError(error.message || String(error));
+  function language() {
+    return settings().language || "zh-CN";
   }
-}
 
-async function requestJson(path, payload) {
-  setBusy(true);
-  showError("");
-  try {
-    const response = await fetch(`http://127.0.0.1:8000${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+  function t(key) {
+    return (copy[language()] && copy[language()][key]) || copy.en[key] || key;
+  }
 
-    const data = await response.json();
+  function apiBase() {
+    return (settings().apiBase || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  }
+
+  function applySettings() {
+    document.documentElement.lang = language();
+    document.documentElement.style.setProperty("--font-size", `${settings().fontSize || 14}px`);
+    elements.historyTitle.textContent = t("history");
+    elements.openSessionButton.textContent = t("open");
+    elements.newSessionButton.textContent = t("newSession");
+    elements.refreshSessionsButton.textContent = t("refresh");
+    elements.agentButton.textContent = t("send");
+    elements.agentInput.placeholder = t("placeholder");
+    if (!elements.selectedPreview.textContent.trim()) {
+      elements.selectedPreview.textContent = t("selectHint");
+    }
+  }
+
+  function setBusy(isBusy) {
+    state.sending = isBusy;
+    elements.loading.hidden = !isBusy;
+    elements.loading.textContent = t("processing");
+    elements.agentButton.disabled = isBusy || !state.officeReady;
+  }
+
+  function showError(message) {
+    elements.errorBox.hidden = !message;
+    elements.errorBox.textContent = message || "";
+  }
+
+  function setHealthClass(name, title) {
+    elements.healthStatus.className = `status-dot${name ? ` ${name}` : ""}`;
+    elements.healthStatus.title = title || "";
+  }
+
+  async function requestJson(path, init) {
+    const response = await fetch(`${apiBase()}${path}`, init);
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
     if (!response.ok) {
-      throw new Error(data.detail || JSON.stringify(data, null, 2));
+      const detail = typeof data === "string" ? data : data.detail || JSON.stringify(data, null, 2);
+      throw new Error(detail);
     }
     return data;
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function runAgent() {
-  const message = elements.agentInput.value.trim();
-  if (!message) {
-    showError("Enter an agent message.");
-    return;
   }
 
-  try {
-    const selection = await getWordPayload();
-    const payload = {
-      message,
-      selection: selection.text.trim()
-        ? {
-            text: selection.text,
-            context: selection.context,
-            instruction: null
-          }
-        : null,
-      history: state.agentHistory
+  async function getWordPayload() {
+    if (!state.officeReady) {
+      throw new Error(t("outsideWord"));
+    }
+
+    return Word.run(async (context) => {
+      const selection = context.document.getSelection();
+      const body = context.document.body;
+      selection.load("text");
+      body.load("text");
+      await context.sync();
+
+      const selectedText = selection.text || "";
+      const bodyText = body.text || "";
+      const hasSelection = selectedText.trim().length > 0;
+
+      return {
+        text: hasSelection ? selectedText : bodyText,
+        documentText: bodyText,
+        selectionText: hasSelection ? selectedText : "",
+        context: getContextWindow(bodyText, selectedText),
+        source: hasSelection ? "selection" : "document",
+      };
+    });
+  }
+
+  function getContextWindow(bodyText, selectedText) {
+    if (!selectedText) {
+      return { before: "", after: "" };
+    }
+    const index = bodyText.indexOf(selectedText);
+    if (index < 0) {
+      return { before: "", after: "" };
+    }
+    return {
+      before: bodyText.slice(Math.max(0, index - 500), index),
+      after: bodyText.slice(index + selectedText.length, index + selectedText.length + 500),
     };
+  }
 
-    appendChat("user", message);
-    elements.agentInput.value = "";
-    await refreshSelectionPreview();
+  async function refreshSelectionPreview() {
+    if (!state.officeReady) {
+      return;
+    }
+    try {
+      const payload = await getWordPayload();
+      const label = payload.source === "selection" ? t("currentSelection") : t("fullDocument");
+      elements.scopeLabel.textContent = `${label} (${payload.text.length} chars)`;
+      elements.selectedPreview.textContent = payload.text || "(empty)";
+    } catch (error) {
+      showError(error.message || String(error));
+    }
+  }
 
-    const result = await requestJson("/agent/chat", payload);
+  function parseList(value) {
+    return String(value || "")
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  async function ensureSession() {
+    if (state.currentSessionId) {
+      return state.currentSessionId;
+    }
+    const session = await requestJson("/agent/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: null }),
+    });
+    state.currentSessionId = session.id;
+
+    const currentSettings = settings();
+    await requestJson(`/agent/sessions/${session.id}/memory`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        document_summary: currentSettings.documentSummary || null,
+        writing_goals: parseList(currentSettings.writingGoals),
+        key_terms: parseList(currentSettings.keyTerms),
+        user_preferences: parseList(currentSettings.userPreferences),
+      }),
+    });
+
+    await loadSessions();
+    return session.id;
+  }
+
+  async function loadSessions() {
+    try {
+      const sessions = await requestJson("/agent/sessions");
+      elements.sessionSelect.innerHTML = "";
+      if (!sessions.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = t("emptyHistory");
+        elements.sessionSelect.appendChild(option);
+        elements.sessionSelect.disabled = true;
+        return;
+      }
+      elements.sessionSelect.disabled = false;
+      sessions.forEach((session) => {
+        const option = document.createElement("option");
+        option.value = session.id;
+        option.textContent = session.title || session.id.slice(0, 8);
+        if (session.id === state.currentSessionId) {
+          option.selected = true;
+        }
+        elements.sessionSelect.appendChild(option);
+      });
+      state.historyLoaded = true;
+    } catch (error) {
+      elements.sessionSelect.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = t("emptyHistory");
+      elements.sessionSelect.appendChild(option);
+      elements.sessionSelect.disabled = true;
+      if (!state.historyLoaded) {
+        showError(`${t("loadHistoryFailed")}: ${error.message || String(error)}`);
+      }
+    }
+  }
+
+  async function openSelectedSession() {
+    const sessionId = elements.sessionSelect.value;
+    if (!sessionId) {
+      return;
+    }
+    try {
+      const messages = await requestJson(`/agent/sessions/${sessionId}/messages`);
+      state.currentSessionId = sessionId;
+      elements.chatLog.innerHTML = "";
+      messages.forEach((message) => {
+        if (message.response) {
+          appendResult(message.role, message.response, { title: message.role === "assistant" ? t("title") : message.role });
+        } else {
+          appendChat(message.role, message.content);
+        }
+      });
+      await loadSessions();
+    } catch (error) {
+      showError(`${t("openFailed")}: ${error.message || String(error)}`);
+    }
+  }
+
+  async function runAgent() {
+    const message = elements.agentInput.value.trim();
+    if (!message) {
+      showError(t("enterMessage"));
+      return;
+    }
+
+    try {
+      setBusy(true);
+      showError("");
+      setHealthClass("busy", t("processing"));
+
+      const selection = await getWordPayload();
+      const sessionId = await ensureSession();
+
+      appendChat("user", message);
+      elements.agentInput.value = "";
+      await refreshSelectionPreview();
+
+      const payload = { message };
+      if ((selection.selectionText || "").trim() || (selection.documentText || "").trim()) {
+        payload.document_context = {
+          document_text: selection.documentText || null,
+          active_scope: selection.selectionText.trim() ? "selection" : "document",
+          selection: selection.selectionText.trim() ? { text: selection.selectionText } : null,
+        };
+      }
+
+      const result = await requestJson(`/agent/sessions/${sessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      appendResult("assistant", result.response, {
+        title: t("title"),
+      });
+
+      setHealthClass("ok", t("backendReady"));
+      await refreshSelectionPreview();
+      await loadSessions();
+    } catch (error) {
+      setHealthClass("error", error.message || String(error));
+      showError(error.message || String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function appendResult(role, result, meta = {}) {
+    const title = meta.title || role;
+    const message = document.createElement("div");
+    message.className = role === "user" ? "chat-message user-message" : "chat-message";
+
+    const roleEl = document.createElement("strong");
+    roleEl.textContent = title;
+    message.appendChild(roleEl);
+
+    if (result.reply) {
+      const reply = document.createElement("pre");
+      reply.textContent = result.reply;
+      message.appendChild(reply);
+    }
+
+    if (result.final_text) {
+      const finalText = document.createElement("pre");
+      finalText.textContent = result.final_text;
+      message.appendChild(finalText);
+    }
+
     const replacement = getApplicableText(result);
     if (replacement) {
-      await replaceCurrentText(selection.source, replacement);
+      const actionsRow = document.createElement("div");
+      actionsRow.className = "message-actions";
+      const applyButton = document.createElement("button");
+      applyButton.type = "button";
+      applyButton.textContent = result.final_text ? t("applyResult") : t("apply");
+      applyButton.addEventListener("click", async () => {
+        try {
+          const source = await currentReplaceSource();
+          await replaceCurrentText(source, replacement);
+          await refreshSelectionPreview();
+        } catch (error) {
+          showError(error.message || String(error));
+        }
+      });
+      actionsRow.appendChild(applyButton);
+      message.appendChild(actionsRow);
     }
-    appendResult("assistant", result, {
-      title: "Agent",
-      replaced: Boolean(replacement)
+
+    if ((result.actions || []).length) {
+      const details = document.createElement("details");
+      details.className = "details-box";
+      const summary = document.createElement("summary");
+      summary.textContent = `${t("details")} (${result.actions.length})`;
+      details.appendChild(summary);
+
+      const metaLines = result.actions.map((action, index) => {
+        const lines = [`${index + 1}. ${action.type || "action"} (${action.risk_level || "info"})`];
+        if (action.original) {
+          lines.push(`Original: ${action.original}`);
+        }
+        if (action.replacement) {
+          lines.push(`Replacement: ${action.replacement}`);
+        }
+        if (action.reason) {
+          lines.push(`Reason: ${action.reason}`);
+        }
+        return lines.join("\n");
+      });
+
+      const pre = document.createElement("pre");
+      pre.textContent = metaLines.join("\n\n");
+      details.appendChild(pre);
+      message.appendChild(details);
+    }
+
+    elements.chatLog.appendChild(message);
+    elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+  }
+
+  function getApplicableText(result) {
+    if (!result) {
+      return null;
+    }
+    const replaceAction = (result.actions || []).find(
+      (action) => action.type === "replace_selection" && action.replacement
+    );
+    return result.final_text || (replaceAction && replaceAction.replacement) || null;
+  }
+
+  async function currentReplaceSource() {
+    const payload = await getWordPayload();
+    return payload.source;
+  }
+
+  async function replaceCurrentText(source, text) {
+    await Word.run(async (context) => {
+      if (source === "document") {
+        context.document.body.insertText(text, Word.InsertLocation.replace);
+      } else {
+        context.document.getSelection().insertText(text, Word.InsertLocation.replace);
+      }
+      await context.sync();
     });
-    if (replacement) {
-      await refreshSelectionPreview();
+  }
+
+  function appendChat(role, content) {
+    const message = document.createElement("div");
+    message.className = role === "user" ? "chat-message user-message" : "chat-message";
+
+    const roleEl = document.createElement("strong");
+    roleEl.textContent = role;
+    const contentEl = document.createElement("pre");
+    contentEl.textContent = content;
+
+    message.appendChild(roleEl);
+    message.appendChild(contentEl);
+    elements.chatLog.appendChild(message);
+    elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+  }
+
+  function resetAgent() {
+    state.currentSessionId = null;
+    state.lastEventIds.clear();
+    elements.chatLog.innerHTML = "";
+    localStorage.removeItem(EVENT_KEY);
+  }
+
+  async function checkHealth() {
+    setHealthClass("", "Backend status");
+    try {
+      const response = await fetch(`${apiBase()}/health`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      setHealthClass("ok", t("backendReady"));
+    } catch (error) {
+      setHealthClass("error", error.message || String(error));
+      showError(`Health check failed: ${error.message || String(error)}`);
     }
-    state.agentHistory.push({ role: "user", content: message });
-    state.agentHistory.push({ role: "assistant", content: result.reply });
-  } catch (error) {
-    showError(error.message || String(error));
-  }
-}
-
-function hydrateCommandEvents() {
-  const events = readStoredEvents();
-  events.forEach(renderCommandEvent);
-}
-
-function readStoredEvents() {
-  try {
-    const events = JSON.parse(localStorage.getItem(EVENT_KEY) || "[]");
-    return Array.isArray(events) ? events : [];
-  } catch {
-    return [];
-  }
-}
-
-function renderCommandEvent(event) {
-  if (!event || state.lastEventIds.has(event.id)) {
-    return;
-  }
-  state.lastEventIds.add(event.id);
-
-  if (event.status === "error") {
-    appendChat("system", `${event.title || "Command"} failed: ${event.message}`);
-    return;
   }
 
-  if (event.status === "started") {
-    appendChat("system", event.message || `${event.title || "Command"} started.`);
-    return;
+  function hydrateCommandEvents() {
+    const events = readStoredEvents();
+    events.forEach(renderCommandEvent);
   }
 
-  appendResult("assistant", event.result, {
-    title: event.title || "Ribbon command",
-    replaced: event.replaced
+  function readStoredEvents() {
+    try {
+      const events = JSON.parse(localStorage.getItem(EVENT_KEY) || "[]");
+      return Array.isArray(events) ? events : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderCommandEvent(event) {
+    if (!event || state.lastEventIds.has(event.id)) {
+      return;
+    }
+    state.lastEventIds.add(event.id);
+
+    if (event.status === "error") {
+      appendChat("system", `${event.title || "Command"} failed: ${event.message}`);
+      return;
+    }
+    if (event.status === "started") {
+      appendChat("system", event.message || `${event.title || "Command"} started.`);
+      return;
+    }
+    appendResult("assistant", event.result || {}, { title: event.title || "Ribbon command" });
+  }
+
+  if (channel) {
+    channel.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "word-ai-event") {
+        renderCommandEvent(event.data.payload);
+      }
+    });
+  }
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === EVENT_KEY) {
+      hydrateCommandEvents();
+    }
   });
-}
 
-function appendResult(role, result, meta = {}) {
-  const title = meta.title ? `${meta.title}${meta.replaced ? " - replaced selection" : ""}` : role;
-  const parts = [];
-  if (result.reply) {
-    parts.push(result.reply);
-  }
-  if (result.final_text) {
-    parts.push(`Result:\n${result.final_text}`);
-  }
-  (result.actions || []).forEach((action, index) => {
-    const lines = [`${index + 1}. ${action.type || "action"} (${action.severity || "info"})`];
-    if (action.original) {
-      lines.push(`Original: ${action.original}`);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      refreshSelectionPreview();
+      hydrateCommandEvents();
+      loadSessions();
+      checkHealth();
     }
-    if (action.replacement) {
-      lines.push(`Replacement: ${action.replacement}`);
-    }
-    if (action.reason) {
-      lines.push(`Reason: ${action.reason}`);
-    }
-    parts.push(lines.join("\n"));
   });
-  appendChat(title, parts.join("\n\n") || "(empty result)");
-}
 
-function getApplicableText(result) {
-  if (!result) {
-    return null;
+  function bindEvents() {
+    elements.agentButton.addEventListener("click", runAgent);
+    elements.refreshSessionsButton.addEventListener("click", loadSessions);
+    elements.openSessionButton.addEventListener("click", openSelectedSession);
+    elements.newSessionButton.addEventListener("click", () => {
+      state.currentSessionId = null;
+      elements.chatLog.innerHTML = "";
+      loadSessions();
+    });
+    elements.agentInput.addEventListener("focus", refreshSelectionPreview);
+    elements.agentInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        runAgent();
+      }
+    });
   }
-  const replaceAction = (result.actions || []).find((action) => {
-    return action.type === "replace_selection" && action.replacement;
-  });
-  return result.final_text || (replaceAction && replaceAction.replacement) || null;
-}
 
-async function replaceCurrentText(source, text) {
-  await Word.run(async (context) => {
-    if (source === "document") {
-      context.document.body.insertText(text, Word.InsertLocation.replace);
-    } else {
-      context.document.getSelection().insertText(text, Word.InsertLocation.replace);
-    }
-    await context.sync();
-  });
-}
-
-function appendChat(role, content) {
-  const message = document.createElement("div");
-  message.className = role === "user" ? "chat-message user-message" : "chat-message";
-
-  const roleEl = document.createElement("strong");
-  roleEl.textContent = role;
-  const contentEl = document.createElement("pre");
-  contentEl.textContent = content;
-
-  message.appendChild(roleEl);
-  message.appendChild(contentEl);
-  elements.chatLog.appendChild(message);
-  elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
-}
-
-function resetAgent() {
-  state.agentHistory = [];
-  state.lastEventIds.clear();
-  elements.chatLog.innerHTML = "";
-  localStorage.removeItem(EVENT_KEY);
-}
-
-async function checkHealth() {
-  elements.healthStatus.className = "status-dot";
-  try {
-    const response = await fetch("http://127.0.0.1:8000/health");
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    elements.healthStatus.className = "status-dot ok";
-  } catch (error) {
-    elements.healthStatus.className = "status-dot error";
-    showError(`Health check failed: ${error.message || String(error)}`);
+  function initializeOffice() {
+    Office.onReady((info) => {
+      state.officeReady = info.host === Office.HostType.Word;
+      setBusy(false);
+      refreshSelectionPreview();
+      hydrateCommandEvents();
+      loadSessions();
+      checkHealth();
+    });
   }
-}
 
-elements.agentButton.addEventListener("click", runAgent);
-elements.resetAgentButton.addEventListener("click", resetAgent);
-elements.agentInput.addEventListener("focus", refreshSelectionPreview);
-elements.agentInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-    runAgent();
+  function initializeWebFallback() {
+    state.officeReady = true;
+    setBusy(false);
+    elements.scopeLabel.textContent = t("selectionAuto");
+    elements.selectedPreview.textContent = t("selectHint");
+    loadSessions();
+    checkHealth();
   }
-});
+
+  applySettings();
+  bindEvents();
+
+  if (typeof Office !== "undefined" && Office.onReady) {
+    initializeOffice();
+  } else {
+    initializeWebFallback();
+  }
+})();

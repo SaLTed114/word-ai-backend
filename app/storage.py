@@ -123,6 +123,7 @@ class AgentSessionStore:
                 FROM agent_sessions s
                 LEFT JOIN agent_messages m ON m.session_id = s.id
                 GROUP BY s.id
+                HAVING COUNT(m.id) > 0
                 ORDER BY s.updated_at DESC
                 LIMIT ?
                 """,
@@ -137,6 +138,18 @@ class AgentSessionStore:
                 (session_id,),
             )
         return result.rowcount > 0
+
+    def update_session_title(self, session_id: str, title: str) -> None:
+        now = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE agent_sessions
+                SET title = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (title, now, session_id),
+            )
 
     def list_messages(self, session_id: str, limit: int = 50) -> list[AgentSessionMessage]:
         with self._connect() as conn:
