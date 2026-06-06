@@ -48,22 +48,22 @@
           <summary data-i18n="memoryTitle">记忆</summary>
           <div class="fold-body">
             <label class="field">
-              <span data-i18n="documentSummaryLabel">Document summary</span>
+              <span data-i18n="documentSummaryLabel">文档摘要</span>
               <textarea id="documentSummary" rows="4"></textarea>
             </label>
 
             <label class="field">
-              <span data-i18n="writingGoalsLabel">Writing goals</span>
+              <span data-i18n="writingGoalsLabel">写作目标</span>
               <textarea id="writingGoals" rows="3"></textarea>
             </label>
 
             <label class="field">
-              <span data-i18n="keyTermsLabel">Key terms</span>
+              <span data-i18n="keyTermsLabel">关键词</span>
               <textarea id="keyTerms" rows="3"></textarea>
             </label>
 
             <label class="field">
-              <span data-i18n="userPreferencesLabel">User preferences</span>
+              <span data-i18n="userPreferencesLabel">用户偏好</span>
               <textarea id="userPreferences" rows="3"></textarea>
             </label>
           </div>
@@ -73,6 +73,20 @@
           <summary data-i18n="aiConfigTitle">模型配置</summary>
           <div class="fold-body">
             <div class="form-grid">
+              <label class="field field-full">
+                <span data-i18n="providerPresetLabel">接口预设</span>
+                <select id="providerPreset">
+                  <option value="custom" data-i18n="providerPresetCustom">自定义</option>
+                  <option value="openai" data-i18n="providerPresetOpenAI">OpenAI</option>
+                  <option value="deepseek" data-i18n="providerPresetDeepSeek">DeepSeek</option>
+                  <option value="qwen" data-i18n="providerPresetQwen">Qwen / 通义千问</option>
+                </select>
+              </label>
+
+              <p class="preset-hint field-full" id="presetHint" data-i18n="providerPresetHint">
+                选择预设会自动填充推荐的 base URL，你仍然可以继续手动修改所有字段。
+              </p>
+
               <label class="field field-full">
                 <span>OPENAI_API_KEY</span>
                 <input id="openaiApiKey" type="password" autocomplete="off" />

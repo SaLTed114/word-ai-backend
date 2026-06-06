@@ -1,5 +1,30 @@
 (function () {
   const shared = window.WordAIShared;
+  const PRESETS = {
+    custom: {},
+    openai: {
+      base_url: "https://api.openai.com/v1",
+      api_endpoint: "https://genaiapi.shanghaitech.edu.cn/api/v1/start",
+      model: "GPT-5.4",
+      use_json_mode: true,
+      trust_env: false,
+    },
+    deepseek: {
+      base_url: "https://api.deepseek.com",
+      api_endpoint: "",
+      model: "deepseek-chat",
+      use_json_mode: true,
+      trust_env: false,
+    },
+    qwen: {
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      api_endpoint: "https://genaiapi.shanghaitech.edu.cn/api/v1/start",
+      model: "qwen-instruct",
+      use_json_mode: true,
+      trust_env: false,
+    },
+  };
+
   const elements = {
     statusPill: document.getElementById("statusPill"),
     message: document.getElementById("message"),
@@ -10,6 +35,8 @@
     writingGoals: document.getElementById("writingGoals"),
     keyTerms: document.getElementById("keyTerms"),
     userPreferences: document.getElementById("userPreferences"),
+    providerPreset: document.getElementById("providerPreset"),
+    presetHint: document.getElementById("presetHint"),
     openaiApiKey: document.getElementById("openaiApiKey"),
     openaiModel: document.getElementById("openaiModel"),
     openaiBaseUrl: document.getElementById("openaiBaseUrl"),
@@ -37,6 +64,12 @@
       keyTermsLabel: "Key terms",
       userPreferencesLabel: "User preferences",
       aiConfigTitle: "Model configuration",
+      providerPresetLabel: "API preset",
+      providerPresetCustom: "Custom",
+      providerPresetOpenAI: "OpenAI",
+      providerPresetDeepSeek: "DeepSeek",
+      providerPresetQwen: "Qwen",
+      providerPresetHint: "Choosing a preset fills in a recommended base URL. You can still edit every field manually.",
       saveButton: "Save settings",
       checkButton: "Check connection",
       saveSuccess: "Settings saved.",
@@ -60,6 +93,12 @@
       keyTermsLabel: "关键词",
       userPreferencesLabel: "用户偏好",
       aiConfigTitle: "模型配置",
+      providerPresetLabel: "接口预设",
+      providerPresetCustom: "自定义",
+      providerPresetOpenAI: "OpenAI",
+      providerPresetDeepSeek: "DeepSeek",
+      providerPresetQwen: "Qwen / 通义千问",
+      providerPresetHint: "选择预设会自动填充推荐的 base URL，你仍然可以继续手动修改所有字段。",
       saveButton: "保存设置",
       checkButton: "检查连接",
       saveSuccess: "设置已保存。",
@@ -137,6 +176,48 @@
     elements.openaiProxyUrl.value = config.proxy_url || "";
     elements.openaiTrustEnv.checked = Boolean(config.trust_env);
     elements.openaiUseJsonMode.checked = Boolean(config.use_json_mode);
+    updatePresetSelection();
+  }
+
+  function currentRemoteSignature() {
+    return {
+      model: elements.openaiModel.value.trim(),
+      base_url: elements.openaiBaseUrl.value.trim(),
+      api_endpoint: elements.openaiApiEndpoint.value.trim(),
+      trust_env: elements.openaiTrustEnv.checked,
+      use_json_mode: elements.openaiUseJsonMode.checked,
+    };
+  }
+
+  function matchesPreset(name) {
+    const preset = PRESETS[name];
+    const current = currentRemoteSignature();
+    return (
+      current.base_url === (preset.base_url || "") &&
+      current.api_endpoint === (preset.api_endpoint || "") &&
+      current.model === (preset.model || "") &&
+      current.trust_env === Boolean(preset.trust_env) &&
+      current.use_json_mode === Boolean(preset.use_json_mode)
+    );
+  }
+
+  function updatePresetSelection() {
+    const preset = ["openai", "deepseek", "qwen"].find(matchesPreset) || "custom";
+    elements.providerPreset.value = preset;
+  }
+
+  function applyPreset(name) {
+    const preset = PRESETS[name];
+    if (!preset || name === "custom") {
+      return;
+    }
+    if (preset.model) {
+      elements.openaiModel.value = preset.model;
+    }
+    elements.openaiBaseUrl.value = preset.base_url || "";
+    elements.openaiApiEndpoint.value = preset.api_endpoint || "";
+    elements.openaiTrustEnv.checked = Boolean(preset.trust_env);
+    elements.openaiUseJsonMode.checked = Boolean(preset.use_json_mode);
   }
 
   async function requestJson(url, init) {
@@ -191,6 +272,24 @@
     }
   }
 
+  function bindPresetInputs() {
+    [
+      elements.openaiModel,
+      elements.openaiBaseUrl,
+      elements.openaiApiEndpoint,
+      elements.openaiTrustEnv,
+      elements.openaiUseJsonMode,
+    ].forEach((element) => {
+      element.addEventListener("input", updatePresetSelection);
+      element.addEventListener("change", updatePresetSelection);
+    });
+
+    elements.providerPreset.addEventListener("change", () => {
+      applyPreset(elements.providerPreset.value);
+      updatePresetSelection();
+    });
+  }
+
   async function initialize() {
     const settings = shared.loadSettings();
     fillLocalSettings(settings);
@@ -203,12 +302,14 @@
     });
     elements.saveButton.addEventListener("click", saveAll);
     elements.checkButton.addEventListener("click", checkConnection);
+    bindPresetInputs();
 
     try {
       await loadRemoteSettings();
     } catch (error) {
       setStatus("warning", t(settings.language, "statusWarning"));
       setMessage(`${t(settings.language, "loadFailure")} ${error.message}`, "error");
+      updatePresetSelection();
     }
   }
 
