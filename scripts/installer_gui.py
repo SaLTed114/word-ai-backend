@@ -18,6 +18,8 @@ from tkinter import filedialog, messagebox, ttk
 
 APP_NAME = "Word AI Assistant"
 APP_EXE = "WordAI.exe"
+ADDIN_SHARE_NAME = "WordAIAssistantAddins"
+ADDIN_CATALOG_GUID = "6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9"
 
 
 def _is_admin() -> bool:
@@ -137,8 +139,8 @@ class InstallerApp:
 
         tk.Label(
             body,
-            text="After installation, open Word to see the Word AI tab in the ribbon.\n"
-                 "Configure your AI model in the Settings panel before use.",
+            text="After installation, open Word and add Word AI from My Add-ins > Shared Folder.\n"
+                 "The installer will register a local catalog and copy the manifest automatically.",
             font=("Segoe UI", 9), bg="#f5f6f8", fg="#6b7280", justify="left"
         ).pack(anchor="w")
 
@@ -218,13 +220,7 @@ class InstallerApp:
         self._set_registry("HKLM", f"SOFTWARE\\{APP_NAME}", "InstallDir", str(install_path))
         self._set_registry("HKLM", f"SOFTWARE\\{APP_NAME}", "DataDir", str(data_path))
 
-        # Registry: trust manifest for Word sideloading
-        guid = "6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9"
-        wef_key = f"HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{{{guid}}}"
-        self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Id", guid)
-        self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Url", "https://localhost:3443")
-        self._set_registry("HKCU", wef_key.replace("HKCU\\", ""), "Flags", "1", "REG_DWORD")
-        # Also copy manifest locally for fallback
+        # Copy the add-in manifest into the installed catalog folder.
         addin_dir = install_path / "addin"
         addin_dir.mkdir(parents=True, exist_ok=True)
         for src in [
@@ -234,6 +230,16 @@ class InstallerApp:
             if src.exists():
                 shutil.copy(src, addin_dir / "manifest.xml")
                 break
+
+        # Register a real shared-folder catalog that Word can discover.
+        catalog_unc = self._create_addin_share(addin_dir)
+        wef_key = (
+            f"SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\"
+            f"{{{ADDIN_CATALOG_GUID}}}"
+        )
+        self._set_registry("HKCU", wef_key, "Id", f"{{{ADDIN_CATALOG_GUID}}}")
+        self._set_registry("HKCU", wef_key, "Url", catalog_unc)
+        self._set_registry("HKCU", wef_key, "Flags", "1", "REG_DWORD")
 
         # Trust SSL certificate
         cert_file = install_path / "_internal" / ".certs" / "localhost.pem"
@@ -246,6 +252,35 @@ class InstallerApp:
         # Create uninstaller shortcut
         uninstaller = install_path / "uninstall.bat"
         self._write_uninstaller(uninstaller, install_path, data_path)
+
+    def _create_addin_share(self, addin_dir: Path) -> str:
+        """Expose the installed manifest folder as a local network share for Word."""
+        try:
+            subprocess.run(
+                ["net", "share", ADDIN_SHARE_NAME, "/delete", "/y"],
+                capture_output=True,
+            )
+            subprocess.run(
+                [
+                    "net",
+                    "share",
+                    f"{ADDIN_SHARE_NAME}={addin_dir}",
+                    "/grant:Everyone,READ",
+                ],
+                capture_output=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Failed to create the local add-in catalog share required by Word."
+            ) from exc
+
+        computer_name = (
+            os.environ.get("COMPUTERNAME")
+            or os.environ.get("HOSTNAME")
+            or "localhost"
+        )
+        return rf"\\{computer_name}\{ADDIN_SHARE_NAME}"
 
     def _create_shortcut(self, install_path: Path, kind: str):
         """Create a Windows shortcut using PowerShell."""
@@ -304,9 +339,11 @@ taskkill /f /im {APP_EXE} >nul 2>&1
 echo [*] Removing shortcuts...
 rmdir /s /q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\{APP_NAME}" 2>nul
 del /q "%PUBLIC%\\Desktop\\{APP_NAME}.lnk" 2>nul
+echo [*] Removing local add-in catalog share...
+net share {ADDIN_SHARE_NAME} /delete /y >nul 2>&1
 echo [*] Removing registry entries...
 reg delete "HKLM\\SOFTWARE\\{APP_NAME}" /f >nul 2>&1
-reg delete "HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{{6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9}}" /f >nul 2>&1
+reg delete "HKCU\\SOFTWARE\\Microsoft\\Office\\16.0\\WEF\\TrustedCatalogs\\{{{ADDIN_CATALOG_GUID}}}" /f >nul 2>&1
 echo [*] Removing SSL certificate...
 certutil -delstore "Root" "localhost" >nul 2>&1
 echo.
