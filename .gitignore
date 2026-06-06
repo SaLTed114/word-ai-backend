@@ -3,6 +3,7 @@
 .certs/
 .env.*
 !.env.example
+temp/
 
 # Python bytecode and caches
 __pycache__/

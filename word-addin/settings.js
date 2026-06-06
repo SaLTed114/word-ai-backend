@@ -42,6 +42,9 @@
     openaiBaseUrl: document.getElementById("openaiBaseUrl"),
     openaiApiEndpoint: document.getElementById("openaiApiEndpoint"),
     openaiProxyUrl: document.getElementById("openaiProxyUrl"),
+    autoApply: document.getElementById("autoApply"),
+    showDetails: document.getElementById("showDetails"),
+    showUndoReview: document.getElementById("showUndoReview"),
     openaiTrustEnv: document.getElementById("openaiTrustEnv"),
     openaiUseJsonMode: document.getElementById("openaiUseJsonMode"),
     saveButton: document.getElementById("saveButton"),
@@ -58,6 +61,10 @@
       languageLabel: "Language",
       fontSizeLabel: "Agent font size",
       apiBaseLabel: "Backend API",
+      behaviorTitle: "Interface behavior",
+      autoApplyLabel: "Auto-apply edits",
+      showDetailsLabel: "Show action details",
+      showUndoReviewLabel: "Show undo/review buttons",
       memoryTitle: "Memory",
       documentSummaryLabel: "Document summary",
       writingGoalsLabel: "Writing goals",
@@ -87,6 +94,10 @@
       languageLabel: "界面语言",
       fontSizeLabel: "Agent 字体大小",
       apiBaseLabel: "后端 API",
+      behaviorTitle: "界面行为",
+      autoApplyLabel: "自动应用编辑",
+      showDetailsLabel: "显示操作详情",
+      showUndoReviewLabel: "显示撤销/审查按钮",
       memoryTitle: "记忆",
       documentSummaryLabel: "文档摘要",
       writingGoalsLabel: "写作目标",
@@ -139,6 +150,9 @@
       languageExplicit: true,
       fontSize: Number.parseInt(elements.fontSize.value, 10) || 14,
       apiBase: elements.apiBase.value.trim() || "http://127.0.0.1:8000",
+      autoApply: elements.autoApply.checked,
+      showDetails: elements.showDetails.checked,
+      showUndoReview: elements.showUndoReview.checked,
       documentSummary: elements.documentSummary.value.trim(),
       writingGoals: elements.writingGoals.value.trim(),
       keyTerms: elements.keyTerms.value.trim(),
@@ -162,6 +176,9 @@
     elements.language.value = settings.language;
     elements.fontSize.value = String(settings.fontSize);
     elements.apiBase.value = settings.apiBase;
+    elements.autoApply.checked = settings.autoApply !== false;
+    elements.showDetails.checked = settings.showDetails !== false;
+    elements.showUndoReview.checked = settings.showUndoReview !== false;
     elements.documentSummary.value = settings.documentSummary || "";
     elements.writingGoals.value = settings.writingGoals || "";
     elements.keyTerms.value = settings.keyTerms || "";

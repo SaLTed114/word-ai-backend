@@ -8,6 +8,7 @@
     lastEventIds: new Set(),
     sending: false,
     historyLoaded: false,
+    lastApplied: null,
   };
 
   const elements = {
@@ -54,6 +55,15 @@
       applyEquation: "Apply formula",
       details: "Details",
       appliedSelection: "replaced selection",
+      autoApplied: "Auto-applied",
+      undo: "Undo",
+      undone: "Undone",
+      review: "Review",
+      reviewTitle: "Review changes",
+      reviewBefore: "Before",
+      reviewAfter: "After",
+      reviewClose: "Close",
+      nothingToUndo: "Nothing to undo.",
       openFailed: "Failed to open session",
       loadHistoryFailed: "Failed to load history",
     },
@@ -82,6 +92,15 @@
       applyEquation: "应用公式",
       details: "详情",
       appliedSelection: "已替换选区",
+      autoApplied: "已自动应用",
+      undo: "撤销",
+      undone: "已撤销",
+      review: "审查",
+      reviewTitle: "变更审查",
+      reviewBefore: "替换前",
+      reviewAfter: "替换后",
+      reviewClose: "关闭",
+      nothingToUndo: "没有可撤销的操作。",
       openFailed: "打开会话失败",
       loadHistoryFailed: "加载历史失败",
     },
@@ -115,6 +134,11 @@
     if (!elements.selectedPreview.textContent.trim()) {
       elements.selectedPreview.textContent = t("selectHint");
     }
+
+    var reviewUndoFromDialog = document.getElementById("reviewUndoFromDialog");
+    var reviewCloseFooter = document.getElementById("reviewCloseFooter");
+    if (reviewUndoFromDialog) reviewUndoFromDialog.textContent = t("undo");
+    if (reviewCloseFooter) reviewCloseFooter.textContent = t("reviewClose");
   }
 
   function setBusy(isBusy) {
@@ -280,9 +304,9 @@
       const messages = await requestJson(`/agent/sessions/${sessionId}/messages`);
       state.currentSessionId = sessionId;
       elements.chatLog.innerHTML = "";
-      messages.forEach((message) => {
+      messages.forEach(function (message) {
         if (message.response) {
-          appendResult(message.role, message.response, { title: message.role === "assistant" ? t("title") : message.role });
+          appendResult(message.role, message.response, { title: message.role === "assistant" ? t("title") : message.role, skipAutoApply: true });
         } else {
           appendChat(message.role, message.content);
         }
@@ -327,7 +351,7 @@
         body: JSON.stringify(payload),
       });
 
-      appendResult("assistant", result.response, {
+      await appendResult("assistant", result.response, {
         title: t("title"),
       });
 
@@ -342,7 +366,7 @@
     }
   }
 
-  function appendResult(role, result, meta = {}) {
+  async function appendResult(role, result, meta = {}) {
     const title = meta.title || role;
     const message = document.createElement("div");
     message.className = role === "user" ? "chat-message user-message" : "chat-message";
@@ -365,55 +389,116 @@
 
     const formulaAction = getApplicableFormulaAction(result);
     const replacement = getApplicableText(result);
+    const currentSettings = settings();
+    const skipAutoApply = meta.skipAutoApply === true;
+
     if (formulaAction || replacement) {
       const actionsRow = document.createElement("div");
       actionsRow.className = "message-actions";
-      const applyButton = document.createElement("button");
-      applyButton.type = "button";
-      applyButton.textContent = formulaAction
-        ? t("applyEquation")
-        : result.final_text
-        ? t("applyResult")
-        : t("apply");
-      applyButton.addEventListener("click", async () => {
+
+      var hasActionsRow = false;
+
+      if (currentSettings.autoApply && !skipAutoApply) {
         try {
-          const source = await currentReplaceSource();
+          var payload = await getWordPayload();
+          var source = payload.source;
+          var originalText = source === "selection"
+            ? (payload.selectionText || payload.text)
+            : payload.text;
+
           if (formulaAction) {
             await applyEquationAction(source, formulaAction);
           } else {
             await replaceCurrentText(source, replacement);
           }
+
+          state.lastApplied = {
+            source: source,
+            originalText: originalText,
+            replacementText: formulaAction
+              ? (formulaAction.formula || formulaAction.replacement || "")
+              : (replacement || ""),
+            isFormula: !!formulaAction,
+            _actionsRow: actionsRow,
+          };
+
           await refreshSelectionPreview();
+
+          if (currentSettings.showUndoReview !== false) {
+            actionsRow.className = "auto-apply-row";
+            hasActionsRow = true;
+
+            var undoBtn = document.createElement("button");
+            undoBtn.type = "button";
+            undoBtn.className = "undo-button";
+            undoBtn.textContent = t("undo");
+            undoBtn.addEventListener("click", function () {
+              undoLastApply(actionsRow);
+            });
+            actionsRow.appendChild(undoBtn);
+
+            var reviewBtn = document.createElement("button");
+            reviewBtn.type = "button";
+            reviewBtn.className = "review-button";
+            reviewBtn.textContent = t("review");
+            reviewBtn.addEventListener("click", function () { openReview(actionsRow); });
+            actionsRow.appendChild(reviewBtn);
+          }
         } catch (error) {
           showError(error.message || String(error));
         }
-      });
-      actionsRow.appendChild(applyButton);
-      message.appendChild(actionsRow);
+      } else {
+        hasActionsRow = true;
+        var applyButton = document.createElement("button");
+        applyButton.type = "button";
+        applyButton.textContent = formulaAction
+          ? t("applyEquation")
+          : result.final_text
+          ? t("applyResult")
+          : t("apply");
+        applyButton.addEventListener("click", async function () {
+          try {
+            var src = await currentReplaceSource();
+            if (formulaAction) {
+              await applyEquationAction(src, formulaAction);
+            } else {
+              await replaceCurrentText(src, replacement);
+            }
+            await refreshSelectionPreview();
+          } catch (error) {
+            showError(error.message || String(error));
+          }
+        });
+        actionsRow.appendChild(applyButton);
+      }
+
+      if (hasActionsRow) {
+        message.appendChild(actionsRow);
+      }
     }
 
-    if ((result.actions || []).length) {
-      const details = document.createElement("details");
+    if ((result.actions || []).length && currentSettings.showDetails !== false) {
+      var details = document.createElement("details");
       details.className = "details-box";
-      const summary = document.createElement("summary");
-      summary.textContent = `${t("details")} (${result.actions.length})`;
+      var summary = document.createElement("summary");
+      summary.textContent = t("details") + " (" + result.actions.length + ")";
       details.appendChild(summary);
 
-      const metaLines = result.actions.map((action, index) => {
-        const lines = [`${index + 1}. ${action.type || "action"} (${action.risk_level || "info"})`];
+      var metaLines = result.actions.map(function (action, index) {
+        var lines = [(index + 1) + ". " + (action.type || "action") + " (" + (action.risk_level || "info") + ")"];
         if (action.original) {
-          lines.push(`Original: ${action.original}`);
+          lines.push("Original: " + action.original);
         }
         if (action.replacement) {
-          lines.push(`Replacement: ${action.replacement}`);
+          lines.push("Replacement: " + action.replacement);
         }
         if (action.reason) {
-          lines.push(`Reason: ${action.reason}`);
+          lines.push("Reason: " + action.reason);
         }
         return lines.join("\n");
       });
 
-      const pre = document.createElement("pre");
+      var pre = document.createElement("pre");
       pre.textContent = metaLines.join("\n\n");
       details.appendChild(pre);
       message.appendChild(details);
@@ -476,6 +561,64 @@
       }
       await context.sync();
     });
+  }
+
+  async function undoLastApply(actionsRow) {
+    if (!state.lastApplied) {
+      showError(t("nothingToUndo"));
+      return;
+    }
+    var applied = state.lastApplied;
+    try {
+      await Word.run(async function (context) {
+        if (applied.source === "document") {
+          context.document.body.insertText(applied.originalText, Word.InsertLocation.replace);
+        } else {
+          context.document.getSelection().insertText(applied.originalText, Word.InsertLocation.replace);
+        }
+        await context.sync();
+      });
+      state.lastApplied = null;
+      var undoBtn = actionsRow.querySelector(".undo-button");
+      if (undoBtn) undoBtn.disabled = true;
+      await refreshSelectionPreview();
+    } catch (error) {
+      showError(error.message || String(error));
+    }
+  }
+
+  function openReview(actionsRow) {
+    if (!state.lastApplied) {
+      showError(t("nothingToUndo"));
+      return;
+    }
+    var dialog = document.getElementById("reviewDialog");
+    document.getElementById("reviewBefore").textContent = state.lastApplied.originalText || "(empty)";
+    document.getElementById("reviewAfter").textContent = state.lastApplied.replacementText || "(empty)";
+    dialog._actionsRow = actionsRow || state.lastApplied._actionsRow || null;
+    if (typeof dialog.showModal === "function") {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute("open", "");
+    }
+  }
+
+  function closeReview() {
+    var dialog = document.getElementById("reviewDialog");
+    if (typeof dialog.close === "function") {
+      dialog.close();
+    } else {
+      dialog.removeAttribute("open");
+    }
+  }
+
+  function undoFromReview() {
+    var dialog = document.getElementById("reviewDialog");
+    var actionsRow = dialog._actionsRow;
+    closeReview();
+    if (actionsRow) {
+      undoLastApply(actionsRow);
+    }
   }
 
   function formulaToOoxml(formula) {
@@ -753,7 +896,7 @@
     }
   }
 
-  function renderCommandEvent(event) {
+  async function renderCommandEvent(event) {
     if (!event || state.lastEventIds.has(event.id)) {
       return;
     }
@@ -767,7 +910,7 @@
       appendChat("system", event.message || `${event.title || "Command"} started.`);
       return;
     }
-    appendResult("assistant", event.result || {}, { title: event.title || "Ribbon command" });
+    await appendResult("assistant", event.result || {}, { title: event.title || "Ribbon command", skipAutoApply: true });
   }
 
   if (channel) {
@@ -782,10 +925,14 @@
     if (event.key === EVENT_KEY) {
       hydrateCommandEvents();
     }
+    if (event.key === shared.STORAGE_KEY) {
+      applySettings();
+    }
   });
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
+      applySettings();
       refreshSelectionPreview();
       hydrateCommandEvents();
       loadSessions();
@@ -809,6 +956,13 @@
         runAgent();
       }
     });
+
+    var reviewCloseBtn = document.getElementById("reviewCloseBtn");
+    var reviewCloseFooter = document.getElementById("reviewCloseFooter");
+    var reviewUndoFromDialog = document.getElementById("reviewUndoFromDialog");
+    if (reviewCloseBtn) reviewCloseBtn.addEventListener("click", closeReview);
+    if (reviewCloseFooter) reviewCloseFooter.addEventListener("click", closeReview);
+    if (reviewUndoFromDialog) reviewUndoFromDialog.addEventListener("click", undoFromReview);
   }
 
   function initializeOffice() {

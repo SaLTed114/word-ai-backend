@@ -46,6 +46,27 @@
     </section>
   </main>
 
+  <dialog id="reviewDialog" class="review-dialog">
+    <div class="review-dialog-header">
+      <span data-i18n="reviewTitle">变更审查</span>
+      <button id="reviewCloseBtn" class="review-close" type="button">&times;</button>
+    </div>
+    <div class="review-diff">
+      <div class="review-col">
+        <div class="review-col-label">替换前</div>
+        <pre id="reviewBefore" class="review-text"></pre>
+      </div>
+      <div class="review-col">
+        <div class="review-col-label">替换后</div>
+        <pre id="reviewAfter" class="review-text"></pre>
+      </div>
+    </div>
+    <div class="review-dialog-footer">
+      <button id="reviewUndoFromDialog" type="button">撤销</button>
+      <button id="reviewCloseFooter" type="button">关闭</button>
+    </div>
+  </dialog>
+
   <script src="./shared.js"></script>
   <script src="./taskpane.js"></script>
 </body>
