@@ -214,6 +214,7 @@ class AgentSessionTurnRequest(BaseModel):
     message: str
     selection: TextRequest | None = None
     document_context: DocumentContextRequest | None = None
+    skills: list[str] = Field(default_factory=list)
 
 
 class AgentSessionTurnResponse(BaseModel):
@@ -241,3 +242,23 @@ class AIConfigUpdate(BaseModel):
     proxy_url: str = ""
     trust_env: bool = False
     use_json_mode: bool = True
+
+
+class SkillCreate(BaseModel):
+    name: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="Skill name without extension.",
+    )
+    content: str = Field(min_length=1, description="Markdown content of the skill.")
+
+
+class SkillInfo(BaseModel):
+    name: str
+    size: int
+
+
+class SkillContent(BaseModel):
+    name: str
+    content: str

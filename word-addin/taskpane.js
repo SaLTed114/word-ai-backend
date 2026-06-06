@@ -336,7 +336,7 @@
       elements.agentInput.value = "";
       await refreshSelectionPreview();
 
-      const payload = { message };
+      const payload = { message, skills: settings().activeSkills };
       if ((selection.selectionText || "").trim() || (selection.documentText || "").trim()) {
         payload.document_context = {
           document_text: selection.documentText || null,
@@ -353,6 +353,7 @@
 
       await appendResult("assistant", result.response, {
         title: t("title"),
+        activeSkills: settings().activeSkills,
       });
 
       setHealthClass("ok", t("backendReady"));
@@ -364,6 +365,12 @@
     } finally {
       setBusy(false);
     }
+  }
+
+  function truncateText(text, maxLen) {
+    maxLen = maxLen || 120;
+    if (!text || text.length <= maxLen) return text;
+    return text.slice(0, maxLen) + "...";
   }
 
   async function appendResult(role, result, meta = {}) {
@@ -381,16 +388,11 @@
       message.appendChild(reply);
     }
 
-    if (result.final_text) {
-      const finalText = document.createElement("pre");
-      finalText.textContent = result.final_text;
-      message.appendChild(finalText);
-    }
-
     const formulaAction = getApplicableFormulaAction(result);
     const replacement = getApplicableText(result);
     const currentSettings = settings();
     const skipAutoApply = meta.skipAutoApply === true;
+    var autoApplied = false;
 
     if (formulaAction || replacement) {
       const actionsRow = document.createElement("div");
@@ -424,30 +426,32 @@
 
           await refreshSelectionPreview();
 
-          if (currentSettings.showUndoReview !== false) {
-            actionsRow.className = "auto-apply-row";
-            hasActionsRow = true;
-
-            var undoBtn = document.createElement("button");
-            undoBtn.type = "button";
-            undoBtn.className = "undo-button";
-            undoBtn.textContent = t("undo");
-            undoBtn.addEventListener("click", function () {
-              undoLastApply(actionsRow);
-            });
-            actionsRow.appendChild(undoBtn);
-
-            var reviewBtn = document.createElement("button");
-            reviewBtn.type = "button";
-            reviewBtn.className = "review-button";
-            reviewBtn.textContent = t("review");
-            reviewBtn.addEventListener("click", function () { openReview(actionsRow); });
-            actionsRow.appendChild(reviewBtn);
+          autoApplied = true;
+          hasActionsRow = true;
+          actionsRow.className = "auto-apply-row";
+          if (currentSettings.showUndoReview === false) {
+            actionsRow.style.display = "none";
           }
+
+          var undoBtn = document.createElement("button");
+          undoBtn.type = "button";
+          undoBtn.className = "undo-button";
+          undoBtn.textContent = t("undo");
+          undoBtn.addEventListener("click", function () {
+            undoLastApply(actionsRow);
+          });
+          actionsRow.appendChild(undoBtn);
+
+          var reviewBtn = document.createElement("button");
+          reviewBtn.type = "button";
+          reviewBtn.className = "review-button";
+          reviewBtn.textContent = t("review");
+          reviewBtn.addEventListener("click", function () { openReview(actionsRow); });
+          actionsRow.appendChild(reviewBtn);
         } catch (error) {
           showError(error.message || String(error));
         }
-      } else {
+      } else if (!skipAutoApply) {
         hasActionsRow = true;
         var applyButton = document.createElement("button");
         applyButton.type = "button";
@@ -477,29 +481,51 @@
       }
     }
 
-    if ((result.actions || []).length && currentSettings.showDetails !== false) {
+    if (result.final_text && !autoApplied) {
+      var finalPre = document.createElement("pre");
+      finalPre.textContent = truncateText(result.final_text, 200);
+      message.appendChild(finalPre);
+    }
+
+    var activeSkills = meta.activeSkills || [];
+    var hasActions = (result.actions || []).length && currentSettings.showDetails !== false;
+    var hasSkills = activeSkills.length > 0;
+
+    if (hasActions || hasSkills) {
       var details = document.createElement("details");
       details.className = "details-box";
+      var summaryParts = [];
+      if ((result.actions || []).length) summaryParts.push(result.actions.length + " actions");
+      if (hasSkills) summaryParts.push("skills: " + activeSkills.join(", "));
       var summary = document.createElement("summary");
-      summary.textContent = t("details") + " (" + result.actions.length + ")";
+      summary.textContent = summaryParts.join(" | ");
       details.appendChild(summary);
 
-      var metaLines = result.actions.map(function (action, index) {
-        var lines = [(index + 1) + ". " + (action.type || "action") + " (" + (action.risk_level || "info") + ")"];
-        if (action.original) {
-          lines.push("Original: " + action.original);
-        }
-        if (action.replacement) {
-          lines.push("Replacement: " + action.replacement);
-        }
-        if (action.reason) {
-          lines.push("Reason: " + action.reason);
-        }
-        return lines.join("\n");
-      });
+      var contentParts = [];
+
+      if (hasActions) {
+        var actionsText = result.actions.map(function (action, index) {
+          var lines = [(index + 1) + ". " + (action.type || "action") + " (" + (action.risk_level || "info") + ")"];
+          if (action.original) {
+            lines.push("Original: " + truncateText(action.original, 100));
+          }
+          if (action.replacement) {
+            lines.push("Replacement: " + truncateText(action.replacement, 100));
+          }
+          if (action.reason) {
+            lines.push("Reason: " + action.reason);
+          }
+          return lines.join("\n");
+        }).join("\n\n");
+        contentParts.push(actionsText);
+      }
+
+      if (hasSkills) {
+        contentParts.push("Active skills: " + activeSkills.map(function (s) { return s + ".md"; }).join(", "));
+      }
 
       var pre = document.createElement("pre");
-      pre.textContent = metaLines.join("\n\n");
+      pre.textContent = contentParts.join("\n\n");
       details.appendChild(pre);
       message.appendChild(details);
     }
@@ -918,6 +944,20 @@
       if (event.data && event.data.type === "word-ai-event") {
         renderCommandEvent(event.data.payload);
       }
+      if (event.data && event.data.type === "settings-changed") {
+        applySettings();
+        refreshMessageDisplay();
+      }
+    });
+  }
+
+  function refreshMessageDisplay() {
+    var s = settings();
+    document.querySelectorAll(".details-box").forEach(function (el) {
+      el.style.display = s.showDetails === false ? "none" : "";
+    });
+    document.querySelectorAll(".auto-apply-row").forEach(function (el) {
+      el.style.display = s.showUndoReview === false ? "none" : "";
     });
   }
 
@@ -927,17 +967,24 @@
     }
     if (event.key === shared.STORAGE_KEY) {
       applySettings();
+      refreshMessageDisplay();
     }
   });
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       applySettings();
+      refreshMessageDisplay();
       refreshSelectionPreview();
       hydrateCommandEvents();
       loadSessions();
       checkHealth();
     }
+  });
+
+  window.addEventListener("focus", () => {
+    applySettings();
+    refreshMessageDisplay();
   });
 
   function bindEvents() {

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from app.ai_client import AIClient
+from app.config import PROJECT_ROOT
 from app.models import AgentMessage, AgentSessionMemory, TaskResponse, TextRequest
 from app.prompts import build_agent_prompt, build_task_prompt
+
+SKILLS_DIR = PROJECT_ROOT / "skills"
 
 
 async def run_syntax(client: AIClient, request: TextRequest) -> TaskResponse:
@@ -33,11 +36,15 @@ async def run_agent_turn(
     selection: TextRequest | None = None,
     history: list[AgentMessage] | None = None,
     memory: AgentSessionMemory | None = None,
+    skills: list[str] | None = None,
 ) -> TaskResponse:
     history = history or []
     memory_text = _format_memory(memory)
     history_text = _format_history(history)
+    skills_text = _load_skills(skills or [])
     sections: list[str] = []
+    if skills_text:
+        sections.append(f"Active skill instructions:\n{skills_text}")
     if history_text:
         sections.append(f"Conversation history:\n{history_text}")
     if memory_text:
@@ -72,3 +79,14 @@ def _format_memory(memory: AgentSessionMemory | None) -> str:
 
 def _format_list(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
+
+
+def _load_skills(names: list[str]) -> str:
+    if not names:
+        return ""
+    parts: list[str] = []
+    for name in names:
+        path = SKILLS_DIR / f"{name}.md"
+        if path.exists():
+            parts.append(path.read_text(encoding="utf-8").strip())
+    return "\n\n".join(parts)

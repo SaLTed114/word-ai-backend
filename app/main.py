@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from app.ai_client import AIClient, AIClientError
-from app.config import AISettings, save_ai_settings
+from app.config import AISettings, PROJECT_ROOT, save_ai_settings
 from app.context_builder import build_text_request_from_document
 from app.models import (
     AIConfigUpdate,
@@ -18,6 +19,9 @@ from app.models import (
     AgentSessionMemory,
     AgentSessionMemoryUpdate,
     AgentSessionMessage,
+    SkillContent,
+    SkillCreate,
+    SkillInfo,
     AgentSessionTurnRequest,
     AgentSessionTurnResponse,
     ContextBuildResult,
@@ -27,6 +31,8 @@ from app.models import (
 )
 from app.services import run_agent_turn, run_formula, run_style, run_syntax, run_word_choice
 from app.storage import AgentSessionStore
+
+SKILLS_DIR = PROJECT_ROOT / "skills"
 
 
 @asynccontextmanager
@@ -235,6 +241,7 @@ async def create_agent_session_message(
             selection=selection,
             history=history,
             memory=memory,
+            skills=request.skills,
         )
     )
     assistant_message = store.add_message(
@@ -252,6 +259,62 @@ async def create_agent_session_message(
         assistant_message=assistant_message,
         response=response,
     )
+
+
+@app.get("/skills", response_model=list[SkillInfo])
+async def list_skills() -> list[SkillInfo]:
+    if not SKILLS_DIR.exists():
+        return []
+    skills: list[SkillInfo] = []
+    for path in sorted(SKILLS_DIR.glob("*.md")):
+        skills.append(SkillInfo(name=path.stem, size=path.stat().st_size))
+    return skills
+
+
+@app.get("/skills/{name}", response_model=SkillContent)
+async def get_skill(name: str) -> SkillContent:
+    path = _skill_path(name)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+    return SkillContent(name=name, content=path.read_text(encoding="utf-8"))
+
+
+@app.post("/skills", response_model=SkillContent)
+async def create_skill(request: SkillCreate) -> SkillContent:
+    path = _skill_path(request.name)
+    if path.exists():
+        raise HTTPException(status_code=409, detail=f"Skill '{request.name}' already exists.")
+    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(request.content, encoding="utf-8")
+    return SkillContent(name=request.name, content=request.content)
+
+
+@app.put("/skills/{name}", response_model=SkillContent)
+async def update_skill(name: str, request: SkillCreate) -> SkillContent:
+    if name != request.name:
+        old_path = _skill_path(name)
+        if not old_path.exists():
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+        old_path.unlink()
+    path = _skill_path(request.name)
+    path.write_text(request.content, encoding="utf-8")
+    return SkillContent(name=request.name, content=request.content)
+
+
+@app.delete("/skills/{name}")
+async def delete_skill(name: str) -> dict:
+    path = _skill_path(name)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+    path.unlink()
+    return {"deleted": True}
+
+
+def _skill_path(name: str) -> Path:
+    sanitized = name.strip().lower()
+    if not sanitized or not all(c.isalnum() or c in "_-" for c in sanitized):
+        raise HTTPException(status_code=400, detail="Invalid skill name.")
+    return SKILLS_DIR / f"{sanitized}.md"
 
 
 async def _handle_task(coro) -> TaskResponse:

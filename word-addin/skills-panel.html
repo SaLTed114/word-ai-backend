@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Skills</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --border: #d9dee6;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --danger: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .page { padding: 16px; }
+    .panel {
+      max-width: 500px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    h1 { margin: 0; font-size: 18px; }
+    .subtitle { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+    .add { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .add input, .add textarea {
+      border: 1px solid #cbd5e1; border-radius: 5px; padding: 8px 10px;
+      font: inherit; outline: none;
+    }
+    .add input:focus, .add textarea:focus { border-color: var(--accent); }
+    .add textarea { min-height: 80px; font-family: Consolas, "Courier New", monospace; resize: vertical; }
+    .add button {
+      align-self: flex-end; border: 0; border-radius: 5px; padding: 8px 20px;
+      background: var(--accent); color: #fff; font: inherit; cursor: pointer;
+    }
+    .add button:hover { background: var(--accent-dark); }
+    .list { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .list-header { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+    .item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: #fbfcfd;
+    }
+    .item input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; cursor: pointer; }
+    .item-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--accent); cursor: pointer; }
+    .item-name:hover { text-decoration: underline; }
+    .item-del {
+      background: none; border: none; color: var(--danger);
+      cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px;
+    }
+    .item-del:hover { opacity: 0.7; }
+    .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 12px 0; }
+    .msg { min-height: 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+    /* modal */
+    .overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+      z-index: 100; justify-content: center; align-items: center;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 8px; padding: 18px;
+      width: 90%; max-width: 520px; max-height: 80vh; display: flex; flex-direction: column; gap: 10px;
+    }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; }
+    .modal-header span { font-weight: 600; font-size: 15px; }
+    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); line-height: 1; }
+    .modal-close:hover { color: var(--text); }
+    .modal textarea {
+      flex: 1; min-height: 260px; border: 1px solid #cbd5e1; border-radius: 5px;
+      padding: 10px; font: 13px Consolas, "Courier New", monospace; resize: vertical; outline: none;
+    }
+    .modal textarea:focus { border-color: var(--accent); }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
+    .modal-footer button {
+      border: 0; border-radius: 5px; padding: 7px 18px; font: inherit; cursor: pointer;
+    }
+    .modal-save { background: var(--accent); color: #fff; }
+    .modal-save:hover { background: var(--accent-dark); }
+    .modal-cancel { background: #e5e7eb; color: var(--text); }
+    .modal-cancel:hover { background: #d1d5db; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="panel">
+    <h1>Skills</h1>
+    <p class="subtitle">Add skills above. Checked skills are sent together with each agent message.</p>
+    <div class="add">
+      <input id="skillName" type="text" placeholder="skill-name" maxlength="64" />
+      <textarea id="skillContent" rows="6" placeholder="# Markdown content..."></textarea>
+      <button id="addBtn" type="button">Add</button>
+    </div>
+    <div class="list" id="skillsList"></div>
+    <p class="msg" id="msg"></p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="modalTitle">skill-name.md</span>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <textarea id="modalContent" rows="16"></textarea>
+    <div class="modal-footer">
+      <button class="modal-cancel" id="modalCancel">Cancel</button>
+      <button class="modal-save" id="modalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="./shared.js"></script>
+<script>
+(function () {
+  var shared = window.WordAIShared;
+  var currentSkillName = null;
+
+  function apiBase() {
+    return (shared.loadSettings().apiBase || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  }
+
+  function getActiveSkills() {
+    return shared.loadSettings().activeSkills || [];
+  }
+
+  function setActiveSkills(names) {
+    shared.saveSettings({ activeSkills: names });
+  }
+
+  async function requestJson(path, init) {
+    var response = await fetch(apiBase() + path, init);
+    var data = await response.json();
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    return data;
+  }
+
+  function showMsg(text, kind) {
+    var el = document.getElementById("msg");
+    el.textContent = text || "";
+    el.style.color = kind === "error" ? "#dc2626" : kind === "success" ? "#166534" : "#6b7280";
+  }
+
+  function openOverlay() { document.getElementById("overlay").classList.add("open"); }
+  function closeOverlay() { document.getElementById("overlay").classList.remove("open"); currentSkillName = null; }
+
+  async function viewSkill(name) {
+    try {
+      var skill = await requestJson("/skills/" + encodeURIComponent(name));
+      currentSkillName = name;
+      document.getElementById("modalTitle").textContent = name + ".md";
+      document.getElementById("modalContent").value = skill.content;
+      openOverlay();
+    } catch (error) {
+      showMsg(error.message || String(error), "error");
+    }
+  }
+
+  async function saveSkill() {
+    if (!currentSkillName) return;
+    var content = document.getElementById("modalContent").value;
+    if (!content.trim()) { showMsg("Content cannot be empty.", "error"); return; }
+    try {
+      await requestJson("/skills/" + encodeURIComponent(currentSkillName), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: currentSkillName, content: content }),
+      });
+      showMsg("Saved.", "success");
+      closeOverlay();
+    } catch (error) {
+      showMsg(error.message || String(error), "error");
+    }
+  }
+
+  async function loadSkills() {
+    var list = document.getElementById("skillsList");
+    var active = getActiveSkills();
+    try {
+      var skills = await requestJson("/skills");
+      list.innerHTML = "";
+      if (!skills.length) {
+        list.innerHTML = '<div class="empty">No custom skills yet.</div>';
+        return;
+      }
+      list.innerHTML = '<div class="list-header">Checked skills are sent together with each agent message.</div>';
+      skills.forEach(function (skill) {
+        var item = document.createElement("div");
+        item.className = "item";
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = active.indexOf(skill.name) >= 0;
+        cb.addEventListener("change", function () {
+          var current = getActiveSkills();
+          if (cb.checked) {
+            if (current.indexOf(skill.name) < 0) current.push(skill.name);
+          } else {
+            current = current.filter(function (n) { return n !== skill.name; });
+          }
+          setActiveSkills(current);
+        });
+
+        var name = document.createElement("span");
+        name.className = "item-name";
+        name.textContent = skill.name + ".md";
+        name.title = "Click to view / edit";
+        name.addEventListener("click", function () {
+          viewSkill(skill.name);
+        });
+
+        var del = document.createElement("button");
+        del.className = "item-del";
+        del.textContent = "×";
+        del.title = "Delete";
+        del.addEventListener("click", function (e) {
+          e.stopPropagation();
+          deleteSkill(skill.name, item);
+        });
+
+        item.appendChild(cb);
+        item.appendChild(name);
+        item.appendChild(del);
+        list.appendChild(item);
+      });
+    } catch (error) {
+      list.innerHTML = '<div class="empty">' + (error.message || String(error)) + '</div>';
+    }
+  }
+
+  async function addSkill() {
+    var name = document.getElementById("skillName").value.trim();
+    var content = document.getElementById("skillContent").value.trim();
+    if (!name || !content) { showMsg("Name and content are required.", "error"); return; }
+    try {
+      await requestJson("/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, content: content }),
+      });
+      document.getElementById("skillName").value = "";
+      document.getElementById("skillContent").value = "";
+      showMsg("Skill added.", "success");
+      await loadSkills();
+    } catch (error) {
+      showMsg(error.message || String(error), "error");
+    }
+  }
+
+  async function deleteSkill(name, itemEl) {
+    try {
+      await requestJson("/skills/" + encodeURIComponent(name), { method: "DELETE" });
+      if (itemEl) itemEl.remove();
+      if (!document.querySelector("#skillsList .item")) {
+        document.getElementById("skillsList").innerHTML = '<div class="empty">No custom skills yet.</div>';
+      }
+      var current = getActiveSkills().filter(function (n) { return n !== name; });
+      setActiveSkills(current);
+      showMsg("Deleted.", "success");
+    } catch (error) {
+      showMsg(error.message || String(error), "error");
+    }
+  }
+
+  document.getElementById("addBtn").addEventListener("click", addSkill);
+  document.getElementById("modalClose").addEventListener("click", closeOverlay);
+  document.getElementById("modalCancel").addEventListener("click", closeOverlay);
+  document.getElementById("modalSave").addEventListener("click", saveSkill);
+  document.getElementById("overlay").addEventListener("click", function (e) {
+    if (e.target === this) closeOverlay();
+  });
+
+  loadSkills();
+})();
+</script>
+</body>
+</html>

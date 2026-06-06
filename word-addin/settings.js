@@ -271,9 +271,18 @@
       fillRemoteSettings(config);
       setStatus("saved", t(localSettings.language, "statusSaved"));
       setMessage(t(localSettings.language, "saveSuccess"), "success");
+      notifyTaskpane();
     } catch (error) {
       setStatus("warning", t(localSettings.language, "statusWarning"));
       setMessage(`${t(localSettings.language, "saveFailure")} ${error.message}`, "error");
+    }
+  }
+
+  function notifyTaskpane() {
+    if ("BroadcastChannel" in window) {
+      var channel = new BroadcastChannel("word-ai");
+      channel.postMessage({ type: "settings-changed" });
+      channel.close();
     }
   }
 

@@ -158,6 +158,29 @@
                   </Action>
                 </Control>
               </Group>
+              <Group id="WordAI.SkillsGroup">
+                <Label resid="Skills.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="WordAI.Skills">
+                  <Label resid="Skills.Label"/>
+                  <Supertip>
+                    <Title resid="Skills.Label"/>
+                    <Description resid="Skills.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>openSkills</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
               <Group id="WordAI.SettingsGroup">
                 <Label resid="Settings.Label"/>
                 <Icon>
@@ -215,6 +238,9 @@
         <bt:String id="Agent.Label" DefaultValue="Agent">
           <bt:Override Locale="zh-CN" Value="&#21161;&#25163;"/>
         </bt:String>
+        <bt:String id="Skills.Label" DefaultValue="Skills">
+          <bt:Override Locale="zh-CN" Value="&#25216;&#33021;"/>
+        </bt:String>
         <bt:String id="Settings.Label" DefaultValue="Settings">
           <bt:Override Locale="zh-CN" Value="&#35774;&#32622;"/>
         </bt:String>
@@ -237,6 +263,9 @@
         </bt:String>
         <bt:String id="Agent.Tooltip" DefaultValue="Open the AI agent task pane.">
           <bt:Override Locale="zh-CN" Value="&#25171;&#24320; AI &#21161;&#25163;&#20391;&#36793;&#26639;&#12290;"/>
+        </bt:String>
+        <bt:String id="Skills.Tooltip" DefaultValue="Manage custom skills.">
+          <bt:Override Locale="zh-CN" Value="&#31649;&#29702;&#33258;&#23450;&#20041;&#25216;&#33021;&#12290;"/>
         </bt:String>
         <bt:String id="Settings.Tooltip" DefaultValue="Open Word AI settings.">
           <bt:Override Locale="zh-CN" Value="&#25171;&#24320; Word AI &#35774;&#32622;&#12290;"/>

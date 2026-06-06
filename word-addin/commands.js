@@ -1,5 +1,6 @@
 const EVENT_KEY = "wordAiEvents";
 const SETTINGS_PAGE_URL = "https://localhost:3443/settings.html?v=20260606-3";
+const SKILLS_PAGE_URL = "https://localhost:3443/skills-panel.html";
 const TASKPANE_URL = "https://localhost:3443/taskpane.html";
 
 const COMMANDS = {
@@ -33,6 +34,7 @@ Office.onReady(() => {
   Office.actions.associate("runFormula", runFormula);
   Office.actions.associate("openAgent", openAgent);
   Office.actions.associate("openSettings", openSettings);
+  Office.actions.associate("openSkills", openSkills);
 });
 
 function runSyntax(event) {
@@ -58,6 +60,11 @@ function openAgent(event) {
 
 function openSettings(event) {
   Office.context.ui.displayDialogAsync(SETTINGS_PAGE_URL, { height: 70, width: 45 });
+  completeEvent(event);
+}
+
+function openSkills(event) {
+  Office.context.ui.displayDialogAsync(SKILLS_PAGE_URL, { height: 60, width: 38 });
   completeEvent(event);
 }
 
