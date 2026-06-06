@@ -1,13 +1,54 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ENV_PATH = PROJECT_ROOT / ".env"
+def _get_base_dir() -> Path:
+    """Get the base directory containing bundled resources."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parents[1]
+
+
+def _get_data_dir() -> Path:
+    """Get the writable data directory (DB, .env overrides, etc.)."""
+    if getattr(sys, "frozen", False):
+        # Check env var first
+        env_dir = os.environ.get("WORD_AI_DATA_DIR", "")
+        if env_dir.strip():
+            return Path(env_dir.strip())
+
+        # Check Windows registry (set by installer)
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                r"SOFTWARE\Word AI Assistant") as key:
+                reg_dir, _ = winreg.QueryValueEx(key, "DataDir")
+                if reg_dir and reg_dir.strip():
+                    return Path(reg_dir.strip())
+        except (OSError, ImportError):
+            pass
+
+        # Default: %APPDATA%\Word AI Assistant
+        base = Path(os.environ["APPDATA"]) / "Word AI Assistant"
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+    return _get_base_dir()
+
+
+PROJECT_ROOT = _get_base_dir()
+DATA_DIR = _get_data_dir()
+
+# .env is writable — use DATA_DIR, fall back to PROJECT_ROOT if not yet created
+_ENV_PATH = DATA_DIR / ".env"
+if not _ENV_PATH.exists() and (PROJECT_ROOT / ".env").exists():
+    import shutil
+    shutil.copy(PROJECT_ROOT / ".env", _ENV_PATH)
+ENV_PATH = _ENV_PATH
 AI_ENV_KEYS = (
     "OPENAI_API_KEY",
     "OPENAI_MODEL",

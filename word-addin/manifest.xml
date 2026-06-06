@@ -16,6 +16,7 @@
   </Description>
   <IconUrl DefaultValue="https://localhost:3443/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3443/assets/icon-80.png"/>
+  <AppIconUrl DefaultValue="https://localhost:3443/assets/app.png"/>
   <SupportUrl DefaultValue="https://localhost:3443/settings.html"/>
   <AppDomains>
     <AppDomain>https://localhost:3443</AppDomain>

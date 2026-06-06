@@ -17,7 +17,9 @@ from app.models import (
 )
 
 
-DEFAULT_DB_PATH = Path("data") / "word_ai.sqlite3"
+from app.config import DATA_DIR
+
+DEFAULT_DB_PATH = DATA_DIR / "word_ai.sqlite3"
 
 
 class AgentSessionStore:
