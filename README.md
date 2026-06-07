@@ -14,12 +14,17 @@ This repository currently focuses on backend capability validation through a Fas
 - Syntax checking
 - Word choice checking
 - Style rewriting
+- Formula / equation handling (LaTeX, OMML)
 - Agent-style iterative writing assistance
+- Subagent dispatch for focused editing tasks (proofread, academic polish, summarize, translate, formula, and custom)
+- Auto-planning subagents via LLM planner
+- LLM-based merge of multiple subagent results
 - Backend-managed agent sessions stored in local SQLite
 - Session memory for document summary, writing goals, key terms, and user preferences
 - Backend context builder for document text, selections, and scope-aware context windows
 - FastAPI HTTP endpoints for backend tasks
 - External prompt templates
+- Skill management API (CRUD for markdown skill files)
 - ShanghaiTech GenAI gateway direct endpoint support
 
 ## Quick Start
@@ -95,6 +100,7 @@ Available commands:
 - `messages <id>`: Show messages in one session
 - `memory <id>`: Show memory for one session
 - `set-memory <id>`: Replace memory for one session
+- `skills`: List available skills
 
 Inside `agent` mode:
 
@@ -103,6 +109,8 @@ Inside `agent` mode:
 - `/memory`: Show session memory
 - `/set-memory`: Replace session memory
 - `/messages`: Show messages in the current session
+- `/subagents <name,...>`: Dispatch the current message to one or more subagents (e.g. `/subagents proofread,academic_polish`)
+- `/plan`: Ask the LLM planner to suggest subagents for the current task
 - `/new`: Start a new session
 - `/exit`: Leave agent mode
 
@@ -185,9 +193,12 @@ The demo has a document editor on the left and an agent chat panel on the right.
 ## HTTP API
 
 - `GET /health`: Check service and AI configuration status
+- `GET /settings/ai-config`: Read current AI configuration
+- `PUT /settings/ai-config`: Update AI configuration at runtime
 - `POST /tasks/syntax`: Check grammar, spelling, punctuation, and clarity
 - `POST /tasks/word-choice`: Check word choice and phrasing
 - `POST /tasks/style`: Rewrite text into a target style
+- `POST /tasks/formula`: Handle LaTeX, equations, and Word equation output
 - `POST /context/build`: Convert document text plus selection data into a model-ready `TextRequest`
 - `POST /agent/sessions`: Create a backend-managed agent session
 - `GET /agent/sessions`: List recent agent sessions
@@ -196,7 +207,15 @@ The demo has a document editor on the left and an agent chat panel on the right.
 - `GET /agent/sessions/{session_id}/messages`: List messages in a session
 - `GET /agent/sessions/{session_id}/memory`: Get session memory
 - `PUT /agent/sessions/{session_id}/memory`: Replace session memory
-- `POST /agent/sessions/{session_id}/messages`: Send one user message and receive one assistant turn
+- `POST /agent/sessions/{session_id}/messages`: Send one user message and receive one assistant turn (supports subagent dispatch via `subagents`, `auto_subagents`, or `planned_subagents` fields)
+- `POST /agent/sessions/{session_id}/subagents/plan`: Ask the LLM planner to suggest subagent calls for a task
+- `POST /agent/sessions/{session_id}/subagents/run`: Run a single subagent independently (stepwise mode)
+- `POST /agent/sessions/{session_id}/subagents/merge`: Merge subagent results and persist messages (stepwise mode)
+- `GET /skills`: List available skill files
+- `GET /skills/{name}`: Read a skill file content
+- `POST /skills`: Create a new skill file
+- `PUT /skills/{name}`: Update or rename a skill file
+- `DELETE /skills/{name}`: Delete a skill file
 
 Example request for `POST /tasks/syntax`:
 
@@ -251,6 +270,63 @@ It returns a normalized `TextRequest` with selected text plus before/after conte
 - `requires_confirmation`: whether the UI must ask before applying the action
 
 Clients should treat actions as proposals. Editing actions should be previewed and confirmed before changing a document.
+
+## Subagents
+
+The agent supports dispatching user requests to specialized subagents that each focus on one editing domain. This gives better results for multi-faceted tasks (e.g. "proofread AND polish this paragraph") than a single monolithic prompt.
+
+### Preset Subagents
+
+| Name | Skill File | Description |
+|------|-----------|-------------|
+| `proofread` | `skills/proofread.md` | Grammar, spelling, punctuation, clarity |
+| `academic_polish` | `skills/academic-polish.md` | Formal academic English polishing |
+| `summarize` | `skills/summarize.md` | Concise summarization |
+| `translate_zh` | `skills/translate-zh.md` | Chinese-English translation |
+| `formula` | `skills/formula.md` | LaTeX, equations, Word equation output |
+
+Each preset subagent has:
+- A **skill file** with domain-specific instructions injected into the prompt
+- **Allowed action types** restricting what editing actions it can return
+- Context mode controlling how much surrounding text is included
+
+Custom subagent names (not in the preset registry) are also supported — they run with a generic writing-assistant prompt and the caller-supplied instruction.
+
+### Dispatch Modes
+
+Three ways to invoke subagents from `POST /agent/sessions/{session_id}/messages`:
+
+1. **Explicit list** (`subagents` field): Provide a list of preset or custom subagent names.
+   ```json
+   { "message": "Check grammar and improve academic tone.", "subagents": ["proofread", "academic_polish"] }
+   ```
+
+2. **Auto-planning** (`auto_subagents: true`): The backend calls an LLM planner that decides which subagents (if any) to dispatch. The planner sees available preset names, skill files, selected text, and the user message. It returns up to 3 subagent calls with custom instructions.
+   ```json
+   { "message": "Make this clearer and more formal.", "auto_subagents": true }
+   ```
+
+3. **Planned subagents** (`planned_subagents` field): The client calls `POST /agent/sessions/{session_id}/subagents/plan` first, reviews the plan, then sends the approved calls.
+   ```json
+   { "message": "...", "planned_subagents": [{"name": "proofread", "instruction": "Focus on grammar only."}] }
+   ```
+
+### Stepwise Mode
+
+For clients that need fine-grained control, the subagent flow can be split into explicit steps:
+
+1. `POST /agent/sessions/{session_id}/subagents/run` — run one subagent, get its `TaskResponse` without persisting messages
+2. `POST /agent/sessions/{session_id}/subagents/merge` — merge results from one or more `run` calls, persist user + assistant messages, and optionally run LLM merge
+
+This lets the client inspect or modify individual subagent responses before merging.
+
+### LLM Merge
+
+After subagents run, their `TaskResponse` results are merged by concatenation (replies joined, actions collected, last non-null `final_text` kept). When `llm_merge_subagents` is true (default), the merged result is sent through an additional LLM call that reconciles conflicts and produces a single coherent `TaskResponse`.
+
+### Skill Management
+
+Skills are markdown files under `skills/` that contain domain-specific prompt instructions. The `/skills` CRUD API lets clients list, read, create, update, and delete skill files at runtime. Preset subagents each have a default skill file; custom skills can be passed per-turn via the `skills` field and are injected into the subagent prompt.
 
 Minimal session flow through the HTTP CLI:
 

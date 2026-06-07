@@ -15,20 +15,24 @@
 - 支持标准 OpenAI SDK 风格配置的预留入口
 - 提供 FastAPI HTTP API
 - 提供 HTTP CLI 调试入口
-- 支持 `syntax`、`word`、`style`、`agent` 四类命令
+- 支持 `syntax`、`word`、`style`、`formula`、`agent` 五类任务
+- 提供 subagent 分发机制，支持专项编辑任务（校对、学术润色、摘要、翻译、公式及自定义 subagent）
+- 提供 LLM 自动规划 subagent 调度
+- 提供 LLM 合并多个 subagent 结果
 - 将 prompt 从代码中拆出到 `prompts/`
 - 使用统一的 `TaskResponse` 返回结构化结果
 - 将业务逻辑抽到 `app/services.py`，供 HTTP API 复用
 - 提供后端维护的 agent session，并用本地 SQLite 保存消息历史
 - 提供 session memory，保存文档摘要、写作目标、术语和用户偏好
 - 提供 context builder，将文档全文、选区和作用范围整理成模型输入
+- 提供 skill 管理 API（markdown skill 文件的增删改查）
 - 提供无框架静态 TXT 编辑器 demo，用于验证前后端数据流
+- 提供自动化测试（pytest）
 
 暂未完成：
 
 - 前端页面
 - Word/WPS 插件壳子
-- 自动化测试
 - 一键安装程序
 
 ## 目录结构
@@ -45,16 +49,29 @@ word-ai-backend/
 │  ├─ prompts.py
 │  ├─ api_cli.py
 │  ├─ services.py
-│  └─ storage.py
+│  ├─ storage.py
+│  └─ subagents.py
 ├─ prompts/
 │  ├─ agent.md
+│  ├─ formula.md
 │  ├─ style.md
 │  ├─ syntax.md
 │  └─ word_choice.md
+├─ skills/
+│  ├─ academic-polish.md
+│  ├─ proofread.md
+│  ├─ qaq.md
+│  ├─ simplify.md
+│  ├─ summarize.md
+│  ├─ translate-zh.md
+│  └─ writing-assistant.md
 ├─ scripts/
-│  └─ start_demo.ps1
-├─ legacy/
-│  └─ old_backend/
+│  ├─ agent_scenario_test.py
+│  └─ test_agent_flow.py
+├─ tests/
+│  ├─ scenarios/
+│  │  └─ academic_rewrite.zh-CN.json
+│  └─ test_subagents.py
 ├─ docs/
 ├─ examples/
 │  └─ simple-web/
@@ -161,9 +178,30 @@ context builder 使用以下模型：
 - `run_syntax`
 - `run_word_choice`
 - `run_style`
+- `run_formula`
 - `run_agent_turn`
+- `run_subagent_turn`：运行单个 subagent，注入 skill 指令和上下文
+- `plan_subagents`：调用 LLM planner 决定需要哪些 subagent
+- `merge_subagent_results`：按规则拼接多个 subagent 的结果
+- `merge_subagent_results_with_llm`：通过 LLM 调和解冲突的 subagent 结果
 
 这一层负责把请求模型转换为 prompt，并调用 `AIClient` 得到 `TaskResponse`。后续如果要改 prompt、响应结构或任务逻辑，应优先在这一层调整，而不是让不同入口各自维护一套逻辑。
+
+### `app/subagents.py`
+
+定义 subagent 注册表和解析逻辑。
+
+- `SubAgentSpec`：描述一个 subagent 的配置（名称、skill 文件、指令、允许的操作类型、上下文模式等）
+- `SUBAGENTS`：预设 subagent 注册表，包含 `proofread`、`academic_polish`、`summarize`、`translate_zh`、`formula`
+- `resolve_subagent()`：按名称解析 subagent，支持通过参数覆盖默认指令和 allowed actions
+- `load_subagent_skill()`：加载 subagent 关联的 skill 文件内容
+- `get_subagent()`：严格按名称获取预设 subagent，未知名称会抛出错误
+
+自定义 subagent 名称（不在预设注册表中）也是支持的——会以通用写作助手 prompt 和调用者提供的指令运行。
+
+### `skills/`
+
+存放 subagent 的领域专用 skill 文件（markdown 格式）。每个预设 subagent 有一个对应的 skill 文件，包含详细的编辑规则和输出格式要求。HTTP API 中的 `/skills` 端点支持在运行时列出、读取、创建、更新和删除 skill 文件。
 
 ### `app/storage.py`
 
@@ -268,9 +306,12 @@ http://127.0.0.1:8000/docs
 当前接口：
 
 - `GET /health`
+- `GET /settings/ai-config`
+- `PUT /settings/ai-config`
 - `POST /tasks/syntax`
 - `POST /tasks/word-choice`
 - `POST /tasks/style`
+- `POST /tasks/formula`
 - `POST /context/build`
 - `POST /agent/sessions`
 - `GET /agent/sessions`
@@ -280,6 +321,14 @@ http://127.0.0.1:8000/docs
 - `GET /agent/sessions/{session_id}/memory`
 - `PUT /agent/sessions/{session_id}/memory`
 - `POST /agent/sessions/{session_id}/messages`
+- `POST /agent/sessions/{session_id}/subagents/plan`
+- `POST /agent/sessions/{session_id}/subagents/run`
+- `POST /agent/sessions/{session_id}/subagents/merge`
+- `GET /skills`
+- `GET /skills/{name}`
+- `POST /skills`
+- `PUT /skills/{name}`
+- `DELETE /skills/{name}`
 
 ### `prompts/`
 
@@ -288,9 +337,15 @@ http://127.0.0.1:8000/docs
 - `syntax.md`：语法检查
 - `word_choice.md`：用词检查
 - `style.md`：文风改写
+- `formula.md`：公式与方程处理
 - `agent.md`：多轮写作助手
 
-后续可以加入 prompt 管理 API，让 UI 支持自定义系统 prompt。
+### `tests/`
+
+自动化测试目录。
+
+- `test_subagents.py`：subagent 功能的完整 pytest 测试套件，覆盖单/多 subagent、自定义 subagent、auto-plan、分步 run/merge、LLM merge、skill 注入、上下文裁剪等场景
+- `scenarios/`：JSON 格式的多轮 agent 场景文件，供 `agent_scenario_test.py` 使用
 
 ### `legacy/`
 
@@ -350,7 +405,7 @@ uvicorn app.main:app --reload
 
 ## Agent 模式说明
 
-当前 agent 模式是“带选区上下文的轻量多轮写作助手”，不是完整工具调用型 agent。
+当前 agent 模式是”带选区上下文的轻量多轮写作助手”，不是完整工具调用型 agent。
 
 它的输入由三部分组成：
 
@@ -374,7 +429,43 @@ agent 返回统一的 `TaskResponse`：
 - `reply` 用于聊天窗口展示
 - `summary` 用于摘要展示
 - `final_text` 用于完整预览
-- `actions` 用于前端渲染预览、确认和“应用修改”等按钮
+- `actions` 用于前端渲染预览、确认和”应用修改”等按钮
+- `subagent_calls` 记录本轮实际调用的 subagent 信息
+
+## Subagent 模式说明
+
+Subagent 机制将复杂的写作任务拆解为多个专项子任务，每个子任务由独立的 subagent 处理。这比单一 prompt 更适合多面任务（例如同时进行校对和学术润色）。
+
+### 预设 Subagent
+
+| 名称 | Skill 文件 | 描述 | 允许的操作 |
+|------|-----------|------|-----------|
+| `proofread` | `skills/proofread.md` | 语法、拼写、标点、表达清晰度 | `replace_selection`, `replace_range`, `add_comment`, `comment`, `highlight`, `ask_user`, `none` |
+| `academic_polish` | `skills/academic-polish.md` | 正式学术英语润色 | `replace_selection`, `replace_range`, `add_comment`, `comment`, `ask_user`, `none` |
+| `summarize` | `skills/summarize.md` | 简洁摘要 | `add_comment`, `comment`, `ask_user`, `none` |
+| `translate_zh` | `skills/translate-zh.md` | 中英互译 | `replace_selection`, `replace_range`, `add_comment`, `comment`, `ask_user`, `none` |
+| `formula` | `skills/formula.md` | LaTeX、公式处理 | `replace_selection`, `replace_selection_equation`, `replace_range`, `insert_equation`, `add_comment`, `comment`, `ask_user`, `none` |
+
+### 三种分发方式
+
+1. **显式列表** — 在 `POST /agent/sessions/{session_id}/messages` 中传入 `subagents` 字段指定名称列表
+2. **自动规划** — 设置 `auto_subagents: true`，后端 LLM planner 自动决定需要哪些 subagent（最多 3 个）
+3. **预规划** — 先调用 `POST /agent/sessions/{session_id}/subagents/plan` 获取建议，审核后通过 `planned_subagents` 传入
+
+### 分步模式
+
+对于需要精细控制的场景，可以将 subagent 流程拆为两步：
+
+1. `POST /agent/sessions/{session_id}/subagents/run` — 运行单个 subagent，不持久化消息
+2. `POST /agent/sessions/{session_id}/subagents/merge` — 合并结果、持久化消息，可选 LLM 合并
+
+### LLM 合并
+
+当多个 subagent 并行运行后，其结果先按规则拼接（replies 连接、actions 汇集、取最后 non-null final_text），然后可选通过 `llm_merge_subagents: true`（默认开启）再经过一次 LLM 调用，协调冲突并生成连贯的最终 `TaskResponse`。
+
+### Skill 系统
+
+Skills 是 `skills/` 目录下的 markdown 文件，定义领域专用的编辑指令。系统提供完整的 CRUD API（`/skills`），支持运行时管理。预设 subagent 默认加载对应 skill 文件；用户可通过 `skills` 参数任意组合额外 skill，注入到 subagent prompt 中。
 
 ## 推荐开发路线
 

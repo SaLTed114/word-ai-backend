@@ -14,12 +14,17 @@
 - 语法检查
 - 用词检查
 - 文风改写
+- 公式 / 方程处理（LaTeX、OMML）
 - Agent 式多轮写作辅助
+- Subagent 分发机制，支持专项编辑任务（校对、学术润色、摘要、翻译、公式及自定义 subagent）
+- LLM 自动规划 subagent 调度
+- LLM 合并多个 subagent 结果
 - 后端维护的 agent session，并用本地 SQLite 保存消息
 - session memory，用于保存文档摘要、写作目标、术语和用户偏好
 - 后端 context builder，用于把全文、选区和作用范围整理成模型输入
 - FastAPI HTTP 接口
 - 外置 prompt 模板
+- Skill 管理 API（markdown skill 文件的增删改查）
 - 支持上海科技大学 GenAI 网关 direct endpoint 调用方式
 
 ## 快速开始
@@ -95,6 +100,7 @@ python -m app.api_cli
 - `messages <id>`：查看某个 session 里的消息
 - `memory <id>`：查看某个 session 的记忆
 - `set-memory <id>`：交互式替换某个 session 的记忆
+- `skills`：列出可用的 skill 文件
 
 进入 `agent` 模式后：
 
@@ -103,6 +109,8 @@ python -m app.api_cli
 - `/memory`：查看当前 session 记忆
 - `/set-memory`：替换当前 session 记忆
 - `/messages`：查看当前 session 消息
+- `/subagents <name,...>`：将当前消息分发给一个或多个 subagent（例如 `/subagents proofread,academic_polish`）
+- `/plan`：请求 LLM planner 为当前任务推荐合适的 subagent
 - `/new`：创建新 session
 - `/exit`：退出 agent 模式
 
@@ -185,9 +193,12 @@ examples/simple-web/index.html
 ## HTTP API
 
 - `GET /health`：检查服务状态和 AI 配置状态
+- `GET /settings/ai-config`：查看当前 AI 配置
+- `PUT /settings/ai-config`：运行时更新 AI 配置
 - `POST /tasks/syntax`：检查语法、拼写、标点和表达清晰度
 - `POST /tasks/word-choice`：检查用词和短语表达
 - `POST /tasks/style`：将文本改写为目标文风
+- `POST /tasks/formula`：处理 LaTeX、公式和 Word 公式输出
 - `POST /context/build`：将文档全文和选区信息转换成模型可用的 `TextRequest`
 - `POST /agent/sessions`：创建一个由后端维护历史的 agent 会话
 - `GET /agent/sessions`：列出最近的 agent 会话
@@ -196,7 +207,15 @@ examples/simple-web/index.html
 - `GET /agent/sessions/{session_id}/messages`：列出会话内消息
 - `GET /agent/sessions/{session_id}/memory`：查看会话记忆
 - `PUT /agent/sessions/{session_id}/memory`：替换会话记忆
-- `POST /agent/sessions/{session_id}/messages`：向会话发送一条用户消息，并得到一轮 assistant 回复
+- `POST /agent/sessions/{session_id}/messages`：向会话发送一条用户消息，并得到一轮 assistant 回复（支持通过 `subagents`、`auto_subagents` 或 `planned_subagents` 字段进行 subagent 分发）
+- `POST /agent/sessions/{session_id}/subagents/plan`：请求 LLM planner 为任务推荐 subagent 调用
+- `POST /agent/sessions/{session_id}/subagents/run`：独立运行单个 subagent（分步模式）
+- `POST /agent/sessions/{session_id}/subagents/merge`：合并 subagent 结果并持久化消息（分步模式）
+- `GET /skills`：列出可用的 skill 文件
+- `GET /skills/{name}`：读取 skill 文件内容
+- `POST /skills`：创建新 skill 文件
+- `PUT /skills/{name}`：更新或重命名 skill 文件
+- `DELETE /skills/{name}`：删除 skill 文件
 
 `POST /tasks/syntax` 请求示例：
 
@@ -250,7 +269,64 @@ context builder 接受文档级输入：
 - `risk_level`：风险等级，可能是 `info`、`low`、`medium`、`high`
 - `requires_confirmation`：前端或插件在应用前是否必须让用户确认
 
-客户端应把 actions 当作“建议动作”，而不是直接执行的命令。会修改文档内容的 action 应先展示预览并等待用户确认。
+客户端应把 actions 当作”建议动作”，而不是直接执行的命令。会修改文档内容的 action 应先展示预览并等待用户确认。
+
+## Subagent 机制
+
+Agent 支持将用户请求分发给多个专门的 subagent，每个 subagent 聚焦于一个编辑领域。相比单一 prompt，这种方式能更好地处理多面任务（例如”校对并润色这一段”）。
+
+### 预设 Subagent
+
+| 名称 | Skill 文件 | 描述 |
+|------|-----------|------|
+| `proofread` | `skills/proofread.md` | 语法、拼写、标点、表达清晰度 |
+| `academic_polish` | `skills/academic-polish.md` | 正式学术英语润色 |
+| `summarize` | `skills/summarize.md` | 简洁摘要 |
+| `translate_zh` | `skills/translate-zh.md` | 中英互译 |
+| `formula` | `skills/formula.md` | LaTeX、公式、Word 公式输出 |
+
+每个预设 subagent 包含：
+- **skill 文件**：注入 prompt 的领域专用指令
+- **允许的操作类型**：限制其可返回的编辑动作
+- **上下文模式**：控制包含多少周围文本
+
+也支持自定义 subagent 名称（不在预设注册表中）—— 它们会以通用写作助手 prompt 和调用者提供的指令运行。
+
+### 分发模式
+
+通过 `POST /agent/sessions/{session_id}/messages` 调用 subagent 有三种方式：
+
+1. **显式列表**（`subagents` 字段）：提供预设或自定义 subagent 名称列表。
+   ```json
+   { “message”: “检查语法并提高学术性。”, “subagents”: [“proofread”, “academic_polish”] }
+   ```
+
+2. **自动规划**（`auto_subagents: true`）：后端调用 LLM planner 决定需要哪些 subagent（如果有的话）。planner 会看到可用预设名称、skill 文件、选中文本和用户消息，返回最多 3 个带自定义指令的 subagent 调用。
+   ```json
+   { “message”: “让这段文字更清晰、更正式。”, “auto_subagents”: true }
+   ```
+
+3. **预规划**（`planned_subagents` 字段）：客户端先调用 `POST /agent/sessions/{session_id}/subagents/plan`，审核计划后再发送批准的调用。
+   ```json
+   { “message”: “...”, “planned_subagents”: [{“name”: “proofread”, “instruction”: “只关注语法。”}] }
+   ```
+
+### 分步模式
+
+对于需要精细控制的客户端，subagent 流程可以拆分为显式步骤：
+
+1. `POST /agent/sessions/{session_id}/subagents/run` — 运行单个 subagent，获取其 `TaskResponse`，不持久化消息
+2. `POST /agent/sessions/{session_id}/subagents/merge` — 合并一个或多个 `run` 调用的结果，持久化用户和 assistant 消息，并可选运行 LLM 合并
+
+这允许客户端在合并前检查或修改单个 subagent 的响应。
+
+### LLM 合并
+
+Subagent 运行后，它们的 `TaskResponse` 结果通过拼接合并（replies 连接，actions 汇集，保留最后一个非空 `final_text`）。当 `llm_merge_subagents` 为 true（默认值）时，合并后的结果会经过一次额外的 LLM 调用，协调冲突并生成一个连贯的 `TaskResponse`。
+
+### Skill 管理
+
+Skills 是 `skills/` 目录下的 markdown 文件，包含领域专用的 prompt 指令。`/skills` CRUD API 允许客户端在运行时列出、读取、创建、更新和删除 skill 文件。预设 subagent 各自有默认 skill 文件；自定义 skill 可以通过 `skills` 字段按轮次传入，并注入到 subagent prompt 中。
 
 通过 HTTP CLI 进行最小 session 调用：
 
