@@ -42,6 +42,10 @@
             <span data-i18n="apiBaseLabel">后端 API</span>
             <input id="apiBase" type="text" placeholder="http://127.0.0.1:8000" />
           </label>
+          <label class="field">
+            <span data-i18n="historyContextLabel">History context</span>
+            <input id="historyContextChars" type="number" min="0" max="20000" step="500" />
+          </label>
         </div>
 
         <details class="fold" id="behaviorFold" open>
@@ -58,6 +62,30 @@
             <label class="check-field">
               <input id="showUndoReview" type="checkbox" />
               <span data-i18n="showUndoReviewLabel">显示撤销/审查按钮</span>
+            </label>
+            <label class="check-field">
+              <input id="showSubagentStatus" type="checkbox" />
+              <span data-i18n="showSubagentStatusLabel">Show subagent status</span>
+            </label>
+          </div>
+        </details>
+
+        <details class="fold" id="subagentsFold" open>
+          <summary data-i18n="subagentsTitle">Subagents</summary>
+          <div class="fold-body">
+            <p class="preset-hint" data-i18n="subagentsHint">
+              Let the agent decide whether to call dynamic subagents and which skills each subagent should use.
+            </p>
+            <label class="check-field">
+              <input id="autoSubagents" type="checkbox" />
+              <span data-i18n="autoSubagentsLabel">Let agent choose subagents automatically</span>
+            </label>
+            <label class="field">
+              <span data-i18n="subagentExecutionModeLabel">Execution mode</span>
+              <select id="subagentExecutionMode">
+                <option value="pipeline" data-i18n="subagentModePipeline">Pipeline</option>
+                <option value="parallel" data-i18n="subagentModeParallel">Parallel</option>
+              </select>
             </label>
           </div>
         </details>

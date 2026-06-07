@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from uuid import uuid4
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,8 @@ TaskType = Literal["syntax", "word_choice", "style", "formula", "agent"]
 RiskLevel = Literal["info", "low", "medium", "high"]
 ContextScope = Literal["selection", "paragraph", "section", "document"]
 FormulaFormat = Literal["latex", "linear", "omml"]
+SubAgentName = Literal["proofread", "academic_polish", "summarize", "translate_zh", "formula"]
+SubAgentContextMode = Literal["minimal", "selection", "document"]
 
 
 class TextContext(BaseModel):
@@ -120,6 +122,7 @@ class TaskResponse(BaseModel):
     summary: str | None = None
     actions: list[TextAction] = Field(default_factory=list)
     final_text: str | None = None
+    subagent_calls: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentMessage(BaseModel):
@@ -210,11 +213,34 @@ class ContextBuildResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class SubAgentCall(BaseModel):
+    name: str
+    instruction: str
+    reason: str | None = None
+    skills: list[str] = Field(default_factory=list)
+
+
 class AgentSessionTurnRequest(BaseModel):
     message: str
     selection: TextRequest | None = None
     document_context: DocumentContextRequest | None = None
     skills: list[str] = Field(default_factory=list)
+    subagents: list[str] = Field(default_factory=list)
+    planned_subagents: list[SubAgentCall] = Field(default_factory=list)
+    auto_subagents: bool = False
+    use_full_skill_prompt: bool = True
+    llm_merge_subagents: bool = True
+    history_context_chars: int = Field(default=4000, ge=0, le=20000)
+    subagent_context_mode: SubAgentContextMode = "selection"
+
+
+class SubAgentResult(BaseModel):
+    name: str
+    response: TaskResponse
+
+
+class AgentPlan(BaseModel):
+    calls: list[SubAgentCall] = Field(default_factory=list)
 
 
 class AgentSessionTurnResponse(BaseModel):
@@ -222,6 +248,26 @@ class AgentSessionTurnResponse(BaseModel):
     user_message: AgentSessionMessage
     assistant_message: AgentSessionMessage
     response: TaskResponse
+
+
+class AgentSubAgentRunRequest(BaseModel):
+    message: str
+    subagent: SubAgentCall
+    selection: TextRequest | None = None
+    document_context: DocumentContextRequest | None = None
+    skills: list[str] = Field(default_factory=list)
+    use_full_skill_prompt: bool = True
+    subagent_context_mode: SubAgentContextMode = "selection"
+
+
+class AgentSubAgentMergeRequest(BaseModel):
+    message: str
+    selection: TextRequest | None = None
+    document_context: DocumentContextRequest | None = None
+    subagent_results: list[SubAgentResult] = Field(default_factory=list)
+    subagent_calls: list[SubAgentCall] = Field(default_factory=list)
+    llm_merge_subagents: bool = True
+    history_context_chars: int = Field(default=4000, ge=0, le=20000)
 
 
 class AIConfigView(BaseModel):

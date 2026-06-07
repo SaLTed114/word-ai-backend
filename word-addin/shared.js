@@ -38,9 +38,14 @@
       language: detectPreferredLanguage(),
       languageExplicit: false,
       fontSize: 14,
+      historyContextChars: 4000,
       autoApply: true,
       showDetails: true,
       showUndoReview: true,
+      showSubagentStatus: true,
+      autoSubagents: false,
+      subagentExecutionMode: "pipeline",
+      activeSubagents: [],
       activeSkills: [],
       documentSummary: "",
       writingGoals: "",
@@ -57,15 +62,43 @@
       language: normalizeLanguage(raw && raw.language, languageExplicit),
       languageExplicit,
       fontSize: normalizeFontSize(raw && raw.fontSize),
+      historyContextChars: normalizeHistoryContextChars(raw && raw.historyContextChars),
       autoApply: raw && raw.autoApply !== undefined ? Boolean(raw.autoApply) : base.autoApply,
       showDetails: raw && raw.showDetails !== undefined ? Boolean(raw.showDetails) : base.showDetails,
       showUndoReview: raw && raw.showUndoReview !== undefined ? Boolean(raw.showUndoReview) : base.showUndoReview,
+      showSubagentStatus:
+        raw && raw.showSubagentStatus !== undefined ? Boolean(raw.showSubagentStatus) : base.showSubagentStatus,
+      autoSubagents: raw && raw.autoSubagents !== undefined ? Boolean(raw.autoSubagents) : base.autoSubagents,
+      subagentExecutionMode: normalizeSubagentExecutionMode(raw && raw.subagentExecutionMode),
+      activeSubagents: normalizeSubagents(raw && raw.activeSubagents),
       activeSkills: Array.isArray(raw && raw.activeSkills) ? raw.activeSkills : base.activeSkills,
       documentSummary: String((raw && raw.documentSummary) || ""),
       writingGoals: String((raw && raw.writingGoals) || ""),
       keyTerms: String((raw && raw.keyTerms) || ""),
       userPreferences: String((raw && raw.userPreferences) || ""),
     };
+  }
+
+  function normalizeSubagents(value) {
+    const allowed = ["proofread", "academic_polish", "summarize", "translate_zh", "formula"];
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.filter(function (item) {
+      return allowed.indexOf(item) >= 0;
+    });
+  }
+
+  function normalizeHistoryContextChars(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+      return 4000;
+    }
+    return Math.min(Math.max(parsed, 0), 20000);
+  }
+
+  function normalizeSubagentExecutionMode(value) {
+    return value === "parallel" ? "parallel" : "pipeline";
   }
 
   function loadSettings() {

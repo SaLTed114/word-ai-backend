@@ -19,17 +19,31 @@ from app.models import (
     AgentSessionMemory,
     AgentSessionMemoryUpdate,
     AgentSessionMessage,
+    AgentSubAgentMergeRequest,
+    AgentSubAgentRunRequest,
+    SubAgentResult,
     SkillContent,
     SkillCreate,
     SkillInfo,
     AgentSessionTurnRequest,
     AgentSessionTurnResponse,
+    AgentPlan,
     ContextBuildResult,
     DocumentContextRequest,
     TaskResponse,
     TextRequest,
 )
-from app.services import run_agent_turn, run_formula, run_style, run_syntax, run_word_choice
+from app.services import (
+    merge_subagent_results,
+    merge_subagent_results_with_llm,
+    plan_subagents,
+    run_agent_turn,
+    run_formula,
+    run_style,
+    run_subagent_turn,
+    run_syntax,
+    run_word_choice,
+)
 from app.storage import AgentSessionStore
 
 SKILLS_DIR = PROJECT_ROOT / "skills"
@@ -215,6 +229,100 @@ async def update_agent_session_memory(
     return store.upsert_memory(session_id, request)
 
 
+@app.post("/agent/sessions/{session_id}/subagents/plan", response_model=AgentPlan)
+async def plan_agent_session_subagents(
+    session_id: str,
+    request: AgentSessionTurnRequest,
+    client: AIClient = Depends(get_client),
+    store: AgentSessionStore = Depends(get_session_store),
+) -> AgentPlan:
+    _require_session(store, session_id)
+    selection = _resolve_turn_selection(request)
+    return await _handle_task(
+        plan_subagents(
+            client=client,
+            message=request.message,
+            selection=selection,
+            skills=request.skills,
+        )
+    )
+
+
+@app.post("/agent/sessions/{session_id}/subagents/run", response_model=SubAgentResult)
+async def run_agent_session_subagent(
+    session_id: str,
+    request: AgentSubAgentRunRequest,
+    client: AIClient = Depends(get_client),
+    store: AgentSessionStore = Depends(get_session_store),
+) -> SubAgentResult:
+    _require_session(store, session_id)
+    selection = _resolve_any_turn_selection(request)
+    history = _to_agent_history(store.list_messages(session_id=session_id, limit=50))
+    memory = store.get_memory(session_id)
+    response = await _handle_task(
+        run_subagent_turn(
+            client=client,
+            name=request.subagent.name,
+            message=request.message,
+            selection=selection,
+            history=history,
+            memory=memory,
+            use_full_skill_prompt=request.use_full_skill_prompt,
+            context_mode=request.subagent_context_mode,
+            instruction=request.subagent.instruction,
+            skills=request.subagent.skills,
+        )
+    )
+    response.subagent_calls = [request.subagent.model_dump()]
+    return SubAgentResult(name=request.subagent.name, response=response)
+
+
+@app.post("/agent/sessions/{session_id}/subagents/merge", response_model=AgentSessionTurnResponse)
+async def merge_agent_session_subagents(
+    session_id: str,
+    request: AgentSubAgentMergeRequest,
+    client: AIClient = Depends(get_client),
+    store: AgentSessionStore = Depends(get_session_store),
+) -> AgentSessionTurnResponse:
+    session = _require_session(store, session_id)
+    selection = _resolve_any_turn_selection(request)
+    previous_messages = store.list_messages(session_id=session_id, limit=50)
+    if not previous_messages and _needs_generated_title(session.title):
+        store.update_session_title(session_id, _derive_session_title(request.message))
+    history = _to_agent_history(previous_messages)
+    memory = store.get_memory(session_id)
+    user_message = store.add_message(session_id=session_id, role="user", content=request.message)
+    response = merge_subagent_results([item.response for item in request.subagent_results])
+    response.subagent_calls = [call.model_dump() for call in request.subagent_calls]
+    if request.llm_merge_subagents:
+        response = await _handle_task(
+            merge_subagent_results_with_llm(
+                client=client,
+                message=request.message,
+                merged=response,
+                selection=selection,
+                history=history,
+                memory=memory,
+                history_context_chars=request.history_context_chars,
+            )
+        )
+    assistant_message = store.add_message(
+        session_id=session_id,
+        role="assistant",
+        content=response.reply,
+        response=response,
+    )
+    session = store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Agent session not found.")
+    return AgentSessionTurnResponse(
+        session=session,
+        user_message=user_message,
+        assistant_message=assistant_message,
+        response=response,
+    )
+
+
 @app.post("/agent/sessions/{session_id}/messages", response_model=AgentSessionTurnResponse)
 async def create_agent_session_message(
     session_id: str,
@@ -234,16 +342,84 @@ async def create_agent_session_message(
         role="user",
         content=request.message,
     )
-    response = await _handle_task(
-        run_agent_turn(
-            client=client,
-            message=request.message,
-            selection=selection,
-            history=history,
-            memory=memory,
-            skills=request.skills,
+    subagent_calls = []
+    if request.planned_subagents:
+        subagent_calls = [
+            {"name": call.name, "instruction": call.instruction, "reason": call.reason, "skills": call.skills}
+            for call in request.planned_subagents
+        ]
+    elif request.subagents:
+        subagent_calls = [
+            {"name": name, "instruction": None, "reason": None, "skills": []}
+            for name in request.subagents
+        ]
+    elif request.auto_subagents:
+        plan = await _handle_task(
+            plan_subagents(
+                client=client,
+                message=request.message,
+                selection=selection,
+                skills=request.skills,
+            )
         )
-    )
+        subagent_calls = [
+            {"name": call.name, "instruction": call.instruction, "reason": call.reason, "skills": call.skills}
+            for call in plan.calls
+        ]
+
+    if subagent_calls:
+        subagent_results = []
+        for subagent_call in subagent_calls:
+            subagent_results.append(
+                await _handle_task(
+                    run_subagent_turn(
+                        client=client,
+                        name=subagent_call["name"],
+                        message=request.message,
+                        selection=selection,
+                        history=history,
+                        memory=memory,
+                        use_full_skill_prompt=request.use_full_skill_prompt,
+                        context_mode=request.subagent_context_mode,
+                        instruction=subagent_call["instruction"],
+                        skills=subagent_call["skills"],
+                    )
+                )
+            )
+        response = merge_subagent_results(subagent_results)
+        response.subagent_calls = [
+            {
+                "name": call["name"],
+                "instruction": call["instruction"],
+                "reason": call["reason"],
+                "skills": call["skills"],
+            }
+            for call in subagent_calls
+        ]
+        if request.llm_merge_subagents:
+            response = await _handle_task(
+                merge_subagent_results_with_llm(
+                    client=client,
+                    message=request.message,
+                    merged=response,
+                    selection=selection,
+                    history=history,
+                    memory=memory,
+                    history_context_chars=request.history_context_chars,
+                )
+            )
+    else:
+        response = await _handle_task(
+            run_agent_turn(
+                client=client,
+                message=request.message,
+                selection=selection,
+                history=history,
+                memory=memory,
+                skills=request.skills,
+                history_context_chars=request.history_context_chars,
+            )
+        )
     assistant_message = store.add_message(
         session_id=session_id,
         role="assistant",
@@ -329,6 +505,15 @@ async def _handle_task(coro) -> TaskResponse:
 
 
 def _resolve_turn_selection(request: AgentSessionTurnRequest) -> TextRequest | None:
+    if request.document_context is None:
+        return request.selection
+    try:
+        return build_text_request_from_document(request.document_context).text_request
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _resolve_any_turn_selection(request) -> TextRequest | None:
     if request.document_context is None:
         return request.selection
     try:

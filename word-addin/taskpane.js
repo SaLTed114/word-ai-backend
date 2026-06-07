@@ -66,6 +66,9 @@
       nothingToUndo: "Nothing to undo.",
       openFailed: "Failed to open session",
       loadHistoryFailed: "Failed to load history",
+      subagentsRunning: "Subagents running",
+      subagentsMerged: "Subagents merged",
+      subagentsSummary: "Subagent summary",
     },
     "zh-CN": {
       title: "Agent",
@@ -106,6 +109,56 @@
     },
   };
 
+  const zhOverrides = {
+    title: "Agent",
+    connecting: "正在连接 Word...",
+    connected: "已连接到 Word",
+    outsideWord: "请在 Microsoft Word 中打开此侧边栏。",
+    history: "历史会话",
+    open: "打开",
+    refresh: "刷新",
+    send: "发送",
+    newSession: "新会话",
+    selectionAuto: "已自动识别选区",
+    currentSelection: "当前选区",
+    fullDocument: "全文",
+    selectHint: "（请先在 Word 中选中文字，再向助手提问。）",
+    placeholder: "询问选中文本或整篇文档。",
+    processing: "处理中...",
+    backendReady: "后端已连接。",
+    backendRetry: "后端暂不可用，发送时会重试连接。",
+    emptyHistory: "暂无历史会话",
+    enterMessage: "请输入消息。",
+    applyResult: "应用结果",
+    apply: "应用",
+    applyEquation: "应用公式",
+    details: "详情",
+    appliedSelection: "已替换选区",
+    autoApplied: "已自动应用",
+    undo: "撤销",
+    undone: "已撤销",
+    review: "审查",
+    reviewTitle: "变更审查",
+    reviewBefore: "替换前",
+    reviewAfter: "替换后",
+    reviewClose: "关闭",
+    nothingToUndo: "没有可撤销的操作。",
+    openFailed: "打开会话失败",
+    loadHistoryFailed: "加载历史失败",
+    subagentsRunning: "Subagent 执行中",
+    subagentsMerged: "Subagent 已合并",
+    subagentsSummary: "Subagent 摘要",
+  };
+
+  const subagentLabels = {
+    proofread: { en: "Proofread", "zh-CN": "校对" },
+    academic_polish: { en: "Academic polish", "zh-CN": "学术润色" },
+    summarize: { en: "Summarize", "zh-CN": "摘要" },
+    translate_zh: { en: "Translate zh/en", "zh-CN": "中英翻译" },
+    formula: { en: "Formula", "zh-CN": "公式" },
+    auto: { en: "Auto", "zh-CN": "自动选择" },
+  };
+
   function settings() {
     return shared.loadSettings();
   }
@@ -115,6 +168,9 @@
   }
 
   function t(key) {
+    if (language() === "zh-CN" && zhOverrides[key]) {
+      return zhOverrides[key];
+    }
     return (copy[language()] && copy[language()][key]) || copy.en[key] || key;
   }
 
@@ -336,7 +392,15 @@
       elements.agentInput.value = "";
       await refreshSelectionPreview();
 
-      const payload = { message, skills: settings().activeSkills };
+      const currentSettings = settings();
+      const autoSubagents = currentSettings.autoSubagents === true;
+      let activeSubagents = autoSubagents ? [] : selectedSubagents();
+      let subagentStatus = null;
+      const payload = {
+        message,
+        skills: currentSettings.activeSkills,
+        history_context_chars: currentSettings.historyContextChars,
+      };
       if ((selection.selectionText || "").trim() || (selection.documentText || "").trim()) {
         payload.document_context = {
           document_text: selection.documentText || null,
@@ -344,16 +408,39 @@
           selection: selection.selectionText.trim() ? { text: selection.selectionText } : null,
         };
       }
+      if (autoSubagents) {
+        const plan = await requestJson(`/agent/sessions/${sessionId}/subagents/plan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        payload.planned_subagents = plan.calls || [];
+        activeSubagents = payload.planned_subagents;
+        if (activeSubagents.length) {
+          subagentStatus = appendSubagentStatus(activeSubagents, "running");
+        }
+      } else if (activeSubagents.length) {
+        payload.subagents = activeSubagents;
+        subagentStatus = appendSubagentStatus(activeSubagents, "running");
+      }
 
-      const result = await requestJson(`/agent/sessions/${sessionId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const result = autoSubagents && activeSubagents.length
+        ? await runPlannedSubagents(sessionId, payload, activeSubagents, subagentStatus, currentSettings.subagentExecutionMode)
+        : await requestJson(`/agent/sessions/${sessionId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+      const executedSubagents = subagentCallsFromResponse(result.response, activeSubagents);
+      if (executedSubagents.length) {
+        completeSubagentStatus(subagentStatus, executedSubagents);
+      }
 
       await appendResult("assistant", result.response, {
         title: t("title"),
-        activeSkills: settings().activeSkills,
+        activeSkills: currentSettings.activeSkills,
+        activeSubagents: executedSubagents,
       });
 
       setHealthClass("ok", t("backendReady"));
@@ -365,6 +452,208 @@
     } finally {
       setBusy(false);
     }
+  }
+
+  async function runPlannedSubagents(sessionId, payload, subagents, statusEl, mode) {
+    const runBase = {
+      message: payload.message,
+      skills: payload.skills || [],
+      document_context: payload.document_context || null,
+    };
+    const results = mode === "parallel"
+      ? await runSubagentsInParallel(sessionId, runBase, subagents, statusEl)
+      : await runSubagentsInPipeline(sessionId, runBase, subagents, statusEl);
+
+    return requestJson(`/agent/sessions/${sessionId}/subagents/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: payload.message,
+        document_context: payload.document_context || null,
+        subagent_results: results,
+        subagent_calls: subagents,
+        history_context_chars: payload.history_context_chars,
+      }),
+    });
+  }
+
+  async function runSubagentsInPipeline(sessionId, runBase, subagents, statusEl) {
+    const results = [];
+    let pipelineText = null;
+    for (let index = 0; index < subagents.length; index += 1) {
+      const body = subagentRunBody(runBase, subagents[index], pipelineText);
+      const result = await requestJson(`/agent/sessions/${sessionId}/subagents/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      results.push(result);
+      pipelineText = textFromTaskResponse(result.response) || pipelineText;
+      completeOneSubagentStatus(statusEl, result.name, index + 1, result);
+    }
+    return results;
+  }
+
+  async function runSubagentsInParallel(sessionId, runBase, subagents, statusEl) {
+    const completed = { count: 0 };
+    return Promise.all(subagents.map(async function (subagent) {
+      const result = await requestJson(`/agent/sessions/${sessionId}/subagents/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subagentRunBody(runBase, subagent, null)),
+      });
+      completed.count += 1;
+      completeOneSubagentStatus(statusEl, result.name, completed.count, result);
+      return result;
+    }));
+  }
+
+  function subagentRunBody(runBase, subagent, pipelineText) {
+    const body = {
+      message: runBase.message,
+      skills: runBase.skills,
+      subagent: subagent,
+    };
+    if (pipelineText) {
+      body.selection = { text: pipelineText };
+    } else if (runBase.document_context) {
+      body.document_context = runBase.document_context;
+    }
+    return body;
+  }
+
+  function textFromTaskResponse(response) {
+    if (!response) {
+      return null;
+    }
+    const replaceAction = (response.actions || []).find(function (action) {
+      return action.type === "replace_selection" && action.replacement;
+    });
+    return response.final_text || (replaceAction && replaceAction.replacement) || null;
+  }
+
+  function selectedSubagents() {
+    return settings().activeSubagents || [];
+  }
+
+  function subagentCallsFromResponse(response, fallback) {
+    const calls = (response && response.subagent_calls) || [];
+    if (!calls.length) {
+      return fallback || [];
+    }
+    return calls;
+  }
+
+  function formatSubagentName(name) {
+    if (name && typeof name === "object") {
+      name = name.name;
+    }
+    const item = subagentLabels[name];
+    if (!item) {
+      return name;
+    }
+    return item[language()] || item.en || name;
+  }
+
+  function appendSubagentStatus(subagents, stateName) {
+    if (!subagents.length || settings().showSubagentStatus === false) {
+      return null;
+    }
+    const message = document.createElement("div");
+    message.className = "chat-message subagent-status";
+
+    const title = document.createElement("strong");
+    title.textContent = stateName === "merged" ? t("subagentsMerged") : t("subagentsRunning");
+    message.appendChild(title);
+
+    const chips = document.createElement("div");
+    chips.className = "subagent-chip-row";
+    subagents.forEach(function (entry, index) {
+      const chip = document.createElement("span");
+      chip.className = "subagent-chip pending";
+      chip.dataset.index = String(index);
+      chip.dataset.name = typeof entry === "object" ? entry.name : entry;
+      chip.textContent = formatSubagentChip(entry, null);
+      chips.appendChild(chip);
+    });
+    message.appendChild(chips);
+
+    elements.chatLog.appendChild(message);
+    elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+    return message;
+  }
+
+  function completeSubagentStatus(statusEl, subagents) {
+    if (!subagents.length || settings().showSubagentStatus === false) {
+      return;
+    }
+    if (!statusEl) {
+      appendSubagentStatus(subagents, "merged");
+      return;
+    }
+    const title = statusEl.querySelector("strong");
+    if (title) {
+      title.textContent = t("subagentsMerged");
+    }
+    const chips = statusEl.querySelector(".subagent-chip-row");
+    if (!chips) {
+      return;
+    }
+    chips.innerHTML = "";
+    subagents.forEach(function (entry, index) {
+      const chip = document.createElement("span");
+      chip.className = "subagent-chip done";
+      chip.textContent = formatSubagentChip(entry, index + 1);
+      chips.appendChild(chip);
+    });
+    elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+  }
+
+  function completeOneSubagentStatus(statusEl, name, doneOrder, result) {
+    if (!statusEl || settings().showSubagentStatus === false) {
+      return;
+    }
+    const chips = Array.from(statusEl.querySelectorAll(".subagent-chip"));
+    const chip = chips.find(function (item) {
+      return item.dataset.name === name;
+    }) || chips.find(function (item) {
+      return !item.classList.contains("done");
+    });
+    if (!chip) {
+      return;
+    }
+    chip.className = "subagent-chip done";
+    chip.textContent = formatSubagentChip(callFromRunResult(result) || name, doneOrder);
+    elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+  }
+
+  function callFromRunResult(result) {
+    const calls = result && result.response && result.response.subagent_calls;
+    if (calls && calls.length) {
+      return calls[0];
+    }
+    return result && result.name ? { name: result.name, skills: [] } : null;
+  }
+
+  function formatSubagentChip(entry, doneOrder) {
+    if (!entry || typeof entry !== "object") {
+      return formatDonePrefix(doneOrder) + formatSubagentName(entry);
+    }
+    const name = formatSubagentName(entry.name);
+    const skills = Array.isArray(entry.skills) ? entry.skills.filter(Boolean) : [];
+    const prefix = formatDonePrefix(doneOrder);
+    const skillText = skills.length
+      ? skills.map(function (skill) { return skill + ".md"; }).join(", ")
+      : "none";
+    return prefix + name + " - skills: " + skillText;
+    if (!skills.length) {
+      return name + " · skills: none";
+    }
+    return name + " · skills: " + skills.map(function (skill) { return skill + ".md"; }).join(", ");
+  }
+
+  function formatDonePrefix(doneOrder) {
+    return doneOrder ? "✓ " + doneOrder + ". " : "";
   }
 
   function truncateText(text, maxLen) {
@@ -488,15 +777,19 @@
     }
 
     var activeSkills = meta.activeSkills || [];
+    var activeSubagents = meta.activeSubagents || [];
+    var subagentCalls = Array.isArray(result.subagent_calls) ? result.subagent_calls : [];
     var hasActions = (result.actions || []).length && currentSettings.showDetails !== false;
     var hasSkills = activeSkills.length > 0;
+    var hasSubagents = activeSubagents.length > 0 && currentSettings.showSubagentStatus !== false;
 
-    if (hasActions || hasSkills) {
+    if (hasActions || hasSkills || hasSubagents) {
       var details = document.createElement("details");
       details.className = "details-box";
       var summaryParts = [];
       if ((result.actions || []).length) summaryParts.push(result.actions.length + " actions");
       if (hasSkills) summaryParts.push("skills: " + activeSkills.join(", "));
+      if (hasSubagents) summaryParts.push("subagents: " + activeSubagents.map(formatSubagentName).join(", "));
       var summary = document.createElement("summary");
       summary.textContent = summaryParts.join(" | ");
       details.appendChild(summary);
@@ -524,6 +817,19 @@
         contentParts.push("Active skills: " + activeSkills.map(function (s) { return s + ".md"; }).join(", "));
       }
 
+      if (hasSubagents) {
+        contentParts.push("Active subagents: " + activeSubagents.map(formatSubagentName).join(", "));
+        var callsForDetails = subagentCalls.length ? subagentCalls : activeSubagents.filter(function (item) {
+          return item && typeof item === "object";
+        });
+        if (callsForDetails.length) {
+          contentParts.push("Subagent calls:\n" + formatSubagentCalls(callsForDetails));
+        }
+        if (result.summary) {
+          contentParts.push(t("subagentsSummary") + ": " + result.summary);
+        }
+      }
+
       var pre = document.createElement("pre");
       pre.textContent = contentParts.join("\n\n");
       details.appendChild(pre);
@@ -532,6 +838,21 @@
 
     elements.chatLog.appendChild(message);
     elements.chatLog.scrollTop = elements.chatLog.scrollHeight;
+  }
+
+  function formatSubagentCalls(calls) {
+    return calls.map(function (call, index) {
+      var lines = [(index + 1) + ". " + formatSubagentName(call.name || "subagent")];
+      if (call.skills && call.skills.length) {
+        lines.push("   skills: " + call.skills.map(function (skill) { return skill + ".md"; }).join(", "));
+      } else {
+        lines.push("   skills: (none)");
+      }
+      if (call.reason) {
+        lines.push("   reason: " + call.reason);
+      }
+      return lines.join("\n");
+    }).join("\n\n");
   }
 
   function getApplicableText(result) {
@@ -908,42 +1229,8 @@
     }
   }
 
-  function hydrateCommandEvents() {
-    const events = readStoredEvents();
-    events.forEach(renderCommandEvent);
-  }
-
-  function readStoredEvents() {
-    try {
-      const events = JSON.parse(localStorage.getItem(EVENT_KEY) || "[]");
-      return Array.isArray(events) ? events : [];
-    } catch {
-      return [];
-    }
-  }
-
-  async function renderCommandEvent(event) {
-    if (!event || state.lastEventIds.has(event.id)) {
-      return;
-    }
-    state.lastEventIds.add(event.id);
-
-    if (event.status === "error") {
-      appendChat("system", `${event.title || "Command"} failed: ${event.message}`);
-      return;
-    }
-    if (event.status === "started") {
-      appendChat("system", event.message || `${event.title || "Command"} started.`);
-      return;
-    }
-    await appendResult("assistant", event.result || {}, { title: event.title || "Ribbon command", skipAutoApply: true });
-  }
-
   if (channel) {
     channel.addEventListener("message", (event) => {
-      if (event.data && event.data.type === "word-ai-event") {
-        renderCommandEvent(event.data.payload);
-      }
       if (event.data && event.data.type === "settings-changed") {
         applySettings();
         refreshMessageDisplay();
@@ -962,9 +1249,6 @@
   }
 
   window.addEventListener("storage", (event) => {
-    if (event.key === EVENT_KEY) {
-      hydrateCommandEvents();
-    }
     if (event.key === shared.STORAGE_KEY) {
       applySettings();
       refreshMessageDisplay();
@@ -976,7 +1260,6 @@
       applySettings();
       refreshMessageDisplay();
       refreshSelectionPreview();
-      hydrateCommandEvents();
       loadSessions();
       checkHealth();
     }
@@ -1017,7 +1300,6 @@
       state.officeReady = info.host === Office.HostType.Word;
       setBusy(false);
       refreshSelectionPreview();
-      hydrateCommandEvents();
       loadSessions();
       checkHealth();
     });

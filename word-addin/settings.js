@@ -30,6 +30,7 @@
     message: document.getElementById("message"),
     language: document.getElementById("language"),
     fontSize: document.getElementById("fontSize"),
+    historyContextChars: document.getElementById("historyContextChars"),
     apiBase: document.getElementById("apiBase"),
     documentSummary: document.getElementById("documentSummary"),
     writingGoals: document.getElementById("writingGoals"),
@@ -45,6 +46,9 @@
     autoApply: document.getElementById("autoApply"),
     showDetails: document.getElementById("showDetails"),
     showUndoReview: document.getElementById("showUndoReview"),
+    showSubagentStatus: document.getElementById("showSubagentStatus"),
+    autoSubagents: document.getElementById("autoSubagents"),
+    subagentExecutionMode: document.getElementById("subagentExecutionMode"),
     openaiTrustEnv: document.getElementById("openaiTrustEnv"),
     openaiUseJsonMode: document.getElementById("openaiUseJsonMode"),
     saveButton: document.getElementById("saveButton"),
@@ -60,11 +64,19 @@
       statusWarning: "Check settings",
       languageLabel: "Language",
       fontSizeLabel: "Agent font size",
+      historyContextLabel: "History context chars",
       apiBaseLabel: "Backend API",
       behaviorTitle: "Interface behavior",
       autoApplyLabel: "Auto-apply edits",
       showDetailsLabel: "Show action details",
       showUndoReviewLabel: "Show undo/review buttons",
+      showSubagentStatusLabel: "Use and show subagent status",
+      subagentsTitle: "Subagents",
+      subagentsHint: "Let the agent decide whether to call dynamic subagents and which skills each subagent should use.",
+      autoSubagentsLabel: "Let agent choose subagents automatically",
+      subagentExecutionModeLabel: "Execution mode",
+      subagentModePipeline: "Pipeline",
+      subagentModeParallel: "Parallel",
       memoryTitle: "Memory",
       documentSummaryLabel: "Document summary",
       writingGoalsLabel: "Writing goals",
@@ -93,6 +105,7 @@
       statusWarning: "请检查设置",
       languageLabel: "界面语言",
       fontSizeLabel: "Agent 字体大小",
+      historyContextLabel: "History 上下文字符数",
       apiBaseLabel: "后端 API",
       behaviorTitle: "界面行为",
       autoApplyLabel: "自动应用编辑",
@@ -120,7 +133,51 @@
     },
   };
 
+  const zhOverrides = {
+    settingsTitle: "设置",
+    settingsSubtitle: "调整界面、记忆与模型配置。",
+    statusIdle: "未保存",
+    statusSaved: "已保存",
+    statusWarning: "请检查设置",
+    languageLabel: "界面语言",
+    fontSizeLabel: "Agent 字体大小",
+    historyContextLabel: "History 上下文字符数",
+    apiBaseLabel: "后端 API",
+    behaviorTitle: "界面行为",
+    autoApplyLabel: "自动应用编辑",
+    showDetailsLabel: "显示操作详情",
+    showUndoReviewLabel: "显示撤销/审查按钮",
+    showSubagentStatusLabel: "显示 subagent 执行情况",
+    subagentsTitle: "Subagent 设置",
+    subagentsHint: "让 agent 自行判断是否需要调用动态 subagent，并决定每个 subagent 使用哪些 skill。",
+    autoSubagentsLabel: "让 agent 自动选择 subagent",
+    subagentExecutionModeLabel: "Subagent 执行模式",
+    subagentModePipeline: "Pipeline（顺序）",
+    subagentModeParallel: "Parallel（并行）",
+    memoryTitle: "记忆",
+    documentSummaryLabel: "文档摘要",
+    writingGoalsLabel: "写作目标",
+    keyTermsLabel: "关键词",
+    userPreferencesLabel: "用户偏好",
+    aiConfigTitle: "模型配置",
+    providerPresetLabel: "接口预设",
+    providerPresetCustom: "自定义",
+    providerPresetDeepSeek: "DeepSeek",
+    providerPresetQwen: "Qwen / 通义千问",
+    providerPresetHint: "选择预设会自动填入推荐的 base URL；你仍然可以继续手动修改所有字段。",
+    saveButton: "保存设置",
+    checkButton: "检查连接",
+    saveSuccess: "设置已保存。",
+    saveFailure: "设置未能完整保存。",
+    checkSuccess: "后端连接正常。",
+    checkFailure: "后端连接失败。",
+    loadFailure: "读取后端模型设置失败。",
+  };
+
   function t(language, key) {
+    if (language === "zh-CN" && zhOverrides[key]) {
+      return zhOverrides[key];
+    }
     const table = copy[language] || copy.en;
     return table[key] || copy.en[key] || key;
   }
@@ -149,10 +206,14 @@
       language: elements.language.value,
       languageExplicit: true,
       fontSize: Number.parseInt(elements.fontSize.value, 10) || 14,
+      historyContextChars: Number.parseInt(elements.historyContextChars.value, 10) || 0,
       apiBase: elements.apiBase.value.trim() || "http://127.0.0.1:8000",
       autoApply: elements.autoApply.checked,
       showDetails: elements.showDetails.checked,
       showUndoReview: elements.showUndoReview.checked,
+      showSubagentStatus: elements.showSubagentStatus.checked,
+      autoSubagents: elements.autoSubagents.checked,
+      subagentExecutionMode: elements.subagentExecutionMode.value,
       documentSummary: elements.documentSummary.value.trim(),
       writingGoals: elements.writingGoals.value.trim(),
       keyTerms: elements.keyTerms.value.trim(),
@@ -175,10 +236,14 @@
   function fillLocalSettings(settings) {
     elements.language.value = settings.language;
     elements.fontSize.value = String(settings.fontSize);
+    elements.historyContextChars.value = String(settings.historyContextChars);
     elements.apiBase.value = settings.apiBase;
     elements.autoApply.checked = settings.autoApply !== false;
     elements.showDetails.checked = settings.showDetails !== false;
     elements.showUndoReview.checked = settings.showUndoReview !== false;
+    elements.showSubagentStatus.checked = settings.showSubagentStatus !== false;
+    elements.autoSubagents.checked = settings.autoSubagents === true;
+    elements.subagentExecutionMode.value = settings.subagentExecutionMode || "pipeline";
     elements.documentSummary.value = settings.documentSummary || "";
     elements.writingGoals.value = settings.writingGoals || "";
     elements.keyTerms.value = settings.keyTerms || "";

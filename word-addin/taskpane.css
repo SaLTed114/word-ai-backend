@@ -205,6 +205,11 @@ textarea:focus {
   border-color: #b8d7dc;
 }
 
+.chat-message.subagent-status {
+  background: #f3f7fb;
+  border-style: dashed;
+}
+
 .chat-message strong {
   display: block;
   margin-bottom: 5px;
@@ -219,6 +224,35 @@ textarea:focus {
   font-family: Arial, Helvetica, sans-serif;
   font-size: var(--font-size);
   line-height: 1.45;
+}
+
+.subagent-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subagent-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid #b8d7dc;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #eef7f8;
+  color: var(--accent-dark);
+  font-size: calc(var(--font-size) - 2px);
+}
+
+.subagent-chip.pending {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.subagent-chip.done {
+  border-color: #9bd1b0;
+  background: #effaf2;
+  color: var(--success);
 }
 
 .message-actions {
