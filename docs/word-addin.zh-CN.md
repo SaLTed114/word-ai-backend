@@ -14,8 +14,7 @@
 
 ```text
 http://127.0.0.1:8000      后端 API
-http://localhost:3000      Word 插件静态文件
-https://localhost:3443     Settings 弹窗静态文件
+https://localhost:3443     Word 插件静态文件
 ```
 
 ## 侧载到 Word
@@ -44,7 +43,7 @@ word-addin/manifest.xml
 
 `Settings` 会打开一个独立设置窗口，里面有后端 API 输入框和 `Check` 按钮；不会占用右侧 Agent 任务窗格。
 
-Settings 弹窗必须使用 HTTPS。启动脚本会自动生成本地证书：
+Word 插件页面必须使用 HTTPS。启动脚本会自动生成本地证书：
 
 ```text
 .certs/localhost.pem
@@ -58,9 +57,11 @@ Settings 弹窗必须使用 HTTPS。启动脚本会自动生成本地证书：
 
 然后重启 Word。
 
+如果使用 `dist\WordAI-Setup.exe` 安装包，安装器会在管理员权限下自动完成这一步：它会把安装包内置的 `localhost.pem` 导入 Windows 受信任的根证书颁发机构，并注册本地共享加载项目录。安装完成后如果 Word 已经打开，重启 Word 再添加或打开加载项。
+
 ## 注意
 
 - 当前版本仍然是本机开发插件，后端需要保持运行。
-- `manifest.xml` 里的任务窗格地址是 `http://localhost:3000/taskpane.html`，Settings 弹窗地址是 `https://localhost:3443/settings.html`。
+- `manifest.xml` 里的任务窗格地址和 Settings 弹窗地址都使用 `https://localhost:3443`。
 - 如果 Word 缓存了旧 UI，重启 Word，或移除后重新添加加载项。
 - 如果你的 Word 环境要求 HTTPS，需要把静态服务换成 HTTPS，再同步修改 `manifest.xml` 的 `SourceLocation` 和相关 URL。

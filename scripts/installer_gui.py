@@ -69,7 +69,7 @@ class InstallerApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title(f"{APP_NAME} Setup")
-        self.root.geometry("520x420")
+        self.root.geometry("560x500")
         self.root.resizable(False, False)
         self.root.configure(bg="#f5f6f8")
 
@@ -82,6 +82,7 @@ class InstallerApp:
         # State
         self.install_dir = tk.StringVar(value=str(Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "WordAIAssistant"))
         self.create_desktop = tk.BooleanVar(value=True)
+        self.status_text = tk.StringVar(value="Ready to install.")
         self.source_dir = get_bundled_source()
 
         # Build UI
@@ -140,9 +141,25 @@ class InstallerApp:
         tk.Label(
             body,
             text="After installation, open Word and add Word AI from My Add-ins > Shared Folder.\n"
-                 "The installer will register a local catalog and copy the manifest automatically.",
+                 "The installer will register a local catalog, copy the manifest, and trust the\n"
+                 "local HTTPS certificate required by the Word add-in.",
             font=("Segoe UI", 9), bg="#f5f6f8", fg="#6b7280", justify="left"
         ).pack(anchor="w")
+
+        tk.Label(body, text="Installation steps", font=("Segoe UI", 10, "bold"),
+                 bg="#f5f6f8", anchor="w").pack(fill="x", pady=(18, 4))
+        tk.Label(
+            body,
+            text="Copy app files -> Register Word add-in catalog -> Trust HTTPS certificate",
+            font=("Segoe UI", 9), bg="#f5f6f8", fg="#374151", justify="left"
+        ).pack(anchor="w")
+
+        self.progress = ttk.Progressbar(body, orient="horizontal", mode="determinate", maximum=6)
+        self.progress.pack(fill="x", pady=(12, 4))
+        tk.Label(
+            body, textvariable=self.status_text, font=("Segoe UI", 9),
+            bg="#f5f6f8", fg="#4b5563", anchor="w"
+        ).pack(fill="x")
 
     def _build_footer(self):
         footer = tk.Frame(self.root, bg="#f5f6f8")
@@ -177,10 +194,12 @@ class InstallerApp:
             return
 
         self.install_btn.config(text="Installing...", state="disabled")
+        self._set_status("Starting installation...", 0)
 
         try:
             self._run_install(install_path, data_path)
         except Exception as e:
+            self._set_status("Installation failed.", 0)
             messagebox.showerror("Installation Failed", str(e))
             self.install_btn.config(text="Install", state="normal")
             return
@@ -189,21 +208,36 @@ class InstallerApp:
 
         # Ask to launch
         if messagebox.askyesno("Installation Complete",
-                               f"{APP_NAME} has been installed.\n\nLaunch now?"):
+                               f"{APP_NAME} has been installed.\n\n"
+                               "The local HTTPS certificate has been trusted for the Word add-in.\n"
+                               "If Word was open, restart it before adding the add-in.\n\n"
+                               "Launch now?"):
             exe = install_path / APP_EXE
             if exe.exists():
                 subprocess.Popen([str(exe)], cwd=str(install_path))
 
         self.root.destroy()
 
+    def _set_status(self, message: str, step: int | None = None):
+        self.status_text.set(message)
+        if hasattr(self, "progress") and step is not None:
+            self.progress["value"] = step
+        self.root.update_idletasks()
+
     def _run_install(self, install_path: Path, data_path: Path):
+        self._set_status("Preparing installation directory...", 1)
+
         # Remove existing installation
         if install_path.exists():
             shutil.rmtree(install_path, ignore_errors=True)
 
+        self._set_status("Copying application files...", 2)
+
         # Copy files
         shutil.copytree(self.source_dir, install_path)
         os.makedirs(data_path, exist_ok=True)
+
+        self._set_status("Creating data directory and shortcuts...", 3)
 
         # Copy default .env from template if none exists
         env_file = data_path / ".env"
@@ -221,6 +255,7 @@ class InstallerApp:
         self._set_registry("HKLM", f"SOFTWARE\\{APP_NAME}", "DataDir", str(data_path))
 
         # Copy the add-in manifest into the installed catalog folder.
+        self._set_status("Registering Word add-in catalog...", 4)
         addin_dir = install_path / "addin"
         addin_dir.mkdir(parents=True, exist_ok=True)
         for src in [
@@ -241,17 +276,55 @@ class InstallerApp:
         self._set_registry("HKCU", wef_key, "Url", catalog_unc)
         self._set_registry("HKCU", wef_key, "Flags", "1", "REG_DWORD")
 
-        # Trust SSL certificate
-        cert_file = install_path / "_internal" / ".certs" / "localhost.pem"
-        if cert_file.exists():
-            subprocess.run(
-                ["certutil", "-addstore", "-f", "Root", str(cert_file)],
-                capture_output=True
-            )
+        self._set_status("Trusting local HTTPS certificate...", 5)
+        self._trust_ssl_certificate(install_path)
 
         # Create uninstaller shortcut
+        self._set_status("Writing uninstaller...", 6)
         uninstaller = install_path / "uninstall.bat"
         self._write_uninstaller(uninstaller, install_path, data_path)
+        self._set_status("Installation complete.", 6)
+
+    def _find_certificate(self, install_path: Path) -> Path:
+        candidates = [
+            install_path / "_internal" / ".certs" / "localhost.pem",
+            install_path / ".certs" / "localhost.pem",
+            install_path / "certs" / "localhost.pem",
+        ]
+        if self.source_dir:
+            candidates.extend([
+                self.source_dir / "_internal" / ".certs" / "localhost.pem",
+                self.source_dir / ".certs" / "localhost.pem",
+            ])
+
+        for cert_file in candidates:
+            if cert_file.exists():
+                return cert_file
+
+        raise RuntimeError(
+            "Local HTTPS certificate was not found.\n\n"
+            "Rebuild the installer with scripts\\build.bat so .certs\\localhost.pem "
+            "is generated and bundled."
+        )
+
+    def _trust_ssl_certificate(self, install_path: Path):
+        """Add the bundled localhost certificate to the Windows trusted root store."""
+        cert_file = self._find_certificate(install_path)
+        result = subprocess.run(
+            ["certutil", "-addstore", "-f", "Root", str(cert_file)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout or "").strip()
+            if not details:
+                details = f"certutil exited with code {result.returncode}."
+            raise RuntimeError(
+                "Certificate authentication failed.\n\n"
+                "The Word add-in uses https://localhost:3443, so Windows must trust "
+                "the bundled localhost certificate.\n\n"
+                f"{details}"
+            )
 
     def _create_addin_share(self, addin_dir: Path) -> str:
         """Expose the installed manifest folder as a local network share for Word."""

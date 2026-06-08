@@ -74,6 +74,22 @@ python -m app.api_cli
 
 HTTP CLI 会真实请求正在运行的后端，并把 `reply`、`final_text`、`actions` 排版输出；这样就不需要在 PowerShell 里手写 JSON。
 
+## 构建安装包
+
+Windows 安装包通过 PyInstaller 构建：
+
+```powershell
+.\scripts\build.bat
+```
+
+构建脚本会先生成本地 Word 插件 HTTPS 证书，再把证书打进 `dist\WordAI\`。生成的安装包位于：
+
+```text
+dist\WordAI-Setup.exe
+```
+
+安装器会申请管理员权限，并在安装过程中执行证书认证步骤：把随安装包附带的 `localhost.pem` 导入 Windows 受信任的根证书颁发机构。这个步骤用于让 Word 正常加载 `https://localhost:3443` 上的插件页面。安装完成后如果 Word 已经打开，需要重启 Word 再添加或打开加载项。
+
 ## HTTP CLI
 
 先启动后端：
