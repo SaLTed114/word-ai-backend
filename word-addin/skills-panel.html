@@ -127,9 +127,17 @@
 (function () {
   var shared = window.WordAIShared;
   var currentSkillName = null;
+  var runtimeConfigPromise = null;
 
   function apiBase() {
     return (shared.loadSettings().apiBase || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  }
+
+  async function ensureRuntimeConfig() {
+    if (shared && shared.loadRuntimeConfig) {
+      runtimeConfigPromise = runtimeConfigPromise || shared.loadRuntimeConfig();
+      await runtimeConfigPromise;
+    }
   }
 
   function getActiveSkills() {
@@ -141,8 +149,16 @@
   }
 
   async function requestJson(path, init) {
-    var response = await fetch(apiBase() + path, init);
-    var data = await response.json();
+    await ensureRuntimeConfig();
+    var url = apiBase() + path;
+    var response;
+    try {
+      response = await fetch(url, init);
+    } catch (error) {
+      throw new Error("Failed to fetch " + url + ". Make sure Word AI is running.");
+    }
+    var contentType = response.headers.get("content-type") || "";
+    var data = contentType.indexOf("application/json") >= 0 ? await response.json() : await response.text();
     if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
     return data;
   }
@@ -282,7 +298,12 @@
     if (e.target === this) closeOverlay();
   });
 
-  loadSkills();
+  async function initialize() {
+    await ensureRuntimeConfig();
+    await loadSkills();
+  }
+
+  initialize();
 })();
 </script>
 </body>
