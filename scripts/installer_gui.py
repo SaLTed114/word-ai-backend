@@ -20,6 +20,7 @@ APP_NAME = "Word AI Assistant"
 APP_EXE = "WordAI.exe"
 ADDIN_SHARE_NAME = "WordAIAssistantAddins"
 ADDIN_CATALOG_GUID = "6b4a47f8-6f03-4dc2-b41b-3e414abbb8f9"
+DATA_DIR_NAME = "Word AI Assistant"
 
 
 def _is_admin() -> bool:
@@ -183,7 +184,7 @@ class InstallerApp:
 
     def _do_install(self):
         install_path = Path(self.install_dir.get())
-        data_path = install_path / "data"
+        data_path = self._default_data_dir()
 
         if not install_path.parent.exists():
             messagebox.showerror("Error", f"Invalid install path:\n{install_path}")
@@ -236,15 +237,21 @@ class InstallerApp:
         # Copy files
         shutil.copytree(self.source_dir, install_path)
         os.makedirs(data_path, exist_ok=True)
+        self._grant_user_write_access(data_path)
 
         self._set_status("Creating data directory and shortcuts...", 3)
 
         # Copy default .env from template if none exists
         env_file = data_path / ".env"
         if not env_file.exists():
-            default_env = install_path / "_internal" / ".env.example"
-            if default_env.exists():
-                shutil.copy(default_env, env_file)
+            for default_env in [
+                install_path / "_internal" / ".env.example",
+                install_path / ".env.example",
+                self.source_dir / ".env.example",
+            ]:
+                if default_env.exists():
+                    shutil.copy(default_env, env_file)
+                    break
 
         # Create shortcuts
         self._create_shortcut(install_path, "desktop")
@@ -284,6 +291,31 @@ class InstallerApp:
         uninstaller = install_path / "uninstall.bat"
         self._write_uninstaller(uninstaller, install_path, data_path)
         self._set_status("Installation complete.", 6)
+
+    def _default_data_dir(self) -> Path:
+        program_data = os.environ.get("ProgramData", "C:\\ProgramData")
+        return Path(program_data) / DATA_DIR_NAME
+
+    def _grant_user_write_access(self, data_path: Path):
+        """Allow non-admin users to save settings and agent data after install."""
+        result = subprocess.run(
+            [
+                "icacls",
+                str(data_path),
+                "/grant",
+                "*S-1-5-32-545:(OI)(CI)M",
+                "/T",
+                "/C",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(
+                "Failed to make the data directory writable for normal users.\n\n"
+                f"Data directory: {data_path}\n\n{details}"
+            )
 
     def _find_certificate(self, install_path: Path) -> Path:
         candidates = [
