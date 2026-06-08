@@ -27,6 +27,8 @@ const COMMANDS = {
   },
 };
 
+let runtimeConfigPromise = null;
+
 Office.onReady(() => {
   Office.actions.associate("runSyntax", runSyntax);
   Office.actions.associate("runWordChoice", runWordChoice);
@@ -141,6 +143,7 @@ function getContextWindow(documentText, selectedText) {
 }
 
 async function requestJson(path, payload) {
+  await ensureRuntimeConfig();
   const response = await fetch(`${apiBase()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -151,6 +154,13 @@ async function requestJson(path, payload) {
     throw new Error(data.detail || JSON.stringify(data));
   }
   return data;
+}
+
+async function ensureRuntimeConfig() {
+  if (window.WordAIShared && window.WordAIShared.loadRuntimeConfig) {
+    runtimeConfigPromise = runtimeConfigPromise || window.WordAIShared.loadRuntimeConfig();
+    await runtimeConfigPromise;
+  }
 }
 
 function apiBase() {

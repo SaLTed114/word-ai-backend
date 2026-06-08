@@ -71,6 +71,11 @@ h1 {
   color: var(--success);
 }
 
+.status-pill[data-state="saving"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .status-pill[data-state="warning"] {
   background: var(--warn-soft);
   color: var(--warn);
@@ -177,6 +182,11 @@ button {
 button.ghost {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.62;
 }
 
 .message {

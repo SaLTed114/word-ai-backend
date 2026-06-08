@@ -12,12 +12,14 @@ Environment: WORD_AI_API_PORT, WORD_AI_UI_PORT
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import socket
 import sys
 import threading
 import http.server
 import ssl
+import urllib.parse
 from functools import partial
 from pathlib import Path
 
@@ -59,8 +61,32 @@ def _find_free_port(host: str, start: int, max_attempts: int = 10) -> int:
     raise RuntimeError(f"No free port found in range {start}-{start + max_attempts}")
 
 
-def start_https_server(addin_dir: Path, cert: Path, key: Path, port: int = 3443) -> threading.Thread:
-    handler = partial(http.server.SimpleHTTPRequestHandler, directory=str(addin_dir))
+def start_https_server(
+    addin_dir: Path,
+    cert: Path,
+    key: Path,
+    api_url: str,
+    port: int = 3443,
+) -> threading.Thread:
+    runtime_config = {
+        "apiBase": api_url,
+    }
+
+    class AddinRequestHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            path = urllib.parse.urlparse(self.path).path
+            if path == "/runtime-config.json":
+                payload = json.dumps(runtime_config).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            super().do_GET()
+
+    handler = partial(AddinRequestHandler, directory=str(addin_dir))
 
     class ReuseServer(http.server.ThreadingHTTPServer):
         allow_reuse_address = True
@@ -77,6 +103,7 @@ def start_https_server(addin_dir: Path, cert: Path, key: Path, port: int = 3443)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     print(f"[Word AI] Add-in UI: https://localhost:{port}")
+    print(f"[Word AI] Runtime config: {api_url}")
     return thread
 
 
@@ -95,13 +122,20 @@ def start_servers() -> None:
     base = _get_package_dir()
     addin_dir = base / "word-addin"
 
+    if _port_in_use(api_host, api_port):
+        alt = _find_free_port(api_host, api_port + 1)
+        print(f"[Word AI] Port {api_port} is already in use, using port {alt} instead.")
+        api_port = alt
+
+    api_url = f"http://{api_host}:{api_port}"
+
     if not addin_dir.exists():
         print(f"[Word AI] ERROR: word-addin directory not found at {addin_dir}")
         print("[Word AI] The add-in UI will not be available.")
     else:
         try:
             cert, key = _find_certs(base)
-            start_https_server(addin_dir, cert, key, port=ui_port)
+            start_https_server(addin_dir, cert, key, api_url=api_url, port=ui_port)
         except FileNotFoundError as e:
             print(f"[Word AI] WARNING: {e}")
             print("[Word AI] Add-in UI will not be available. Generate certs first.")
@@ -109,13 +143,8 @@ def start_servers() -> None:
     from app.config import DATA_DIR
     print(f"[Word AI] Data directory: {DATA_DIR}")
 
-    if _port_in_use(api_host, api_port):
-        alt = _find_free_port(api_host, api_port + 1)
-        print(f"[Word AI] Port {api_port} is already in use, using port {alt} instead.")
-        api_port = alt
-
     import uvicorn
-    print(f"[Word AI] API: http://{api_host}:{api_port}")
+    print(f"[Word AI] API: {api_url}")
     uvicorn.run(
         "app.main:app",
         host=api_host,

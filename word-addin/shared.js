@@ -1,5 +1,44 @@
 (function () {
   const STORAGE_KEY = "wordAiSettings";
+  const DEFAULT_API_BASE = "http://127.0.0.1:8000";
+  const runtimeConfig = {
+    apiBase: DEFAULT_API_BASE,
+  };
+
+  function normalizeApiBase(value) {
+    return String(value || "").trim().replace(/\/+$/, "");
+  }
+
+  function applyRuntimeConfig(config) {
+    const apiBase = normalizeApiBase(config && config.apiBase);
+    if (apiBase) {
+      runtimeConfig.apiBase = apiBase;
+    }
+    return getRuntimeConfig();
+  }
+
+  async function loadRuntimeConfig() {
+    if (!window.fetch || window.location.protocol === "file:") {
+      return getRuntimeConfig();
+    }
+    try {
+      const response = await fetch(`./runtime-config.json?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (response.ok) {
+        applyRuntimeConfig(await response.json());
+      }
+    } catch (error) {
+      // Fall back to the default API address.
+    }
+    return getRuntimeConfig();
+  }
+
+  function getRuntimeConfig() {
+    return {
+      apiBase: runtimeConfig.apiBase,
+    };
+  }
 
   function detectPreferredLanguage() {
     const officeLanguage =
@@ -34,7 +73,8 @@
 
   function defaultSettings() {
     return {
-      apiBase: "http://127.0.0.1:8000",
+      apiBase: runtimeConfig.apiBase,
+      apiBaseExplicit: false,
       language: detectPreferredLanguage(),
       languageExplicit: false,
       fontSize: 14,
@@ -57,8 +97,12 @@
   function normalizeSettings(raw) {
     const base = defaultSettings();
     const languageExplicit = normalizeBoolean(raw && raw.languageExplicit, false);
+    const apiBaseExplicit = normalizeBoolean(raw && raw.apiBaseExplicit, false);
     return {
-      apiBase: String((raw && raw.apiBase) || base.apiBase).trim() || base.apiBase,
+      apiBase: apiBaseExplicit
+        ? normalizeApiBase((raw && raw.apiBase) || base.apiBase) || base.apiBase
+        : base.apiBase,
+      apiBaseExplicit,
       language: normalizeLanguage(raw && raw.language, languageExplicit),
       languageExplicit,
       fontSize: normalizeFontSize(raw && raw.fontSize),
@@ -129,7 +173,11 @@
 
   const api = {
     STORAGE_KEY,
+    DEFAULT_API_BASE,
     defaultSettings,
+    getRuntimeConfig,
+    loadRuntimeConfig,
+    applyRuntimeConfig,
     detectPreferredLanguage,
     normalizeSettings,
     loadSettings,

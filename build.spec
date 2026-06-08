@@ -38,6 +38,65 @@ _env = _base / ".env"
 if _env.exists():
     datas.append((str(_env), "."))
 
+# Default settings template for first install.
+_env_example = _base / ".env.example"
+if _env_example.exists():
+    datas.append((str(_env_example), "."))
+
+excluded_modules = [
+    # Heavy optional developer/notebook/doc tooling pulled from Anaconda hooks.
+    "IPython",
+    "jedi",
+    "parso",
+    "pygments",
+    "sphinx",
+    "docutils",
+    "babel",
+    "pytest",
+    "py",
+    "pluggy",
+    "astroid",
+    "mypy",
+    "black",
+    "blib2to3",
+    "yapf",
+    "yapf_third_party",
+    "nbformat",
+    "jsonschema",
+    "jsonschema_specifications",
+    "referencing",
+    "rpds",
+    "zmq",
+    "psutil",
+    "platformdirs",
+    # GUI stacks are not used by the packaged backend/static server.
+    "tkinter",
+    "PyQt5",
+    "PyQt6",
+    "PySide2",
+    "PySide6",
+    "qtpy",
+    # Optional HTTP/WebSocket accelerators and compression codecs.
+    "httptools",
+    "watchfiles",
+    "watchgod",
+    "websockets",
+    "zstandard",
+    "brotli",
+    "brotlicffi",
+    # Optional crypto/password packages not needed for localhost HTTPS serving.
+    "cryptography",
+    "bcrypt",
+    # Data/science/ML/image stacks.
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "PIL",
+    "cv2",
+    "tensorflow",
+    "torch",
+]
+
 a = Analysis(
     ["server.py"],
     pathex=[],
@@ -92,16 +151,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        "tkinter",
-        "matplotlib",
-        "numpy",
-        "pandas",
-        "PIL",
-        "cv2",
-        "tensorflow",
-        "torch",
-    ],
+    excludes=excluded_modules,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=None,

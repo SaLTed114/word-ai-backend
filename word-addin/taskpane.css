@@ -201,6 +201,10 @@ textarea:focus {
 }
 
 .chat-message.user-message {
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  margin-left: auto;
+  margin-right: 0;
   background: #eef7f8;
   border-color: #b8d7dc;
 }

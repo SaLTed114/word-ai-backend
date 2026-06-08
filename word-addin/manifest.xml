@@ -46,9 +46,9 @@
               <Group id="WordAI.SyntaxGroup">
                 <Label resid="Syntax.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="Syntax.Icon.16"/>
+                  <bt:Image size="32" resid="Syntax.Icon.32"/>
+                  <bt:Image size="80" resid="Syntax.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.Syntax">
                   <Label resid="Syntax.Label"/>
@@ -57,9 +57,9 @@
                     <Description resid="Syntax.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="Syntax.Icon.16"/>
+                    <bt:Image size="32" resid="Syntax.Icon.32"/>
+                    <bt:Image size="80" resid="Syntax.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>runSyntax</FunctionName>
@@ -69,9 +69,9 @@
               <Group id="WordAI.WordChoiceGroup">
                 <Label resid="WordChoice.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="WordChoice.Icon.16"/>
+                  <bt:Image size="32" resid="WordChoice.Icon.32"/>
+                  <bt:Image size="80" resid="WordChoice.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.WordChoice">
                   <Label resid="WordChoice.Label"/>
@@ -80,9 +80,9 @@
                     <Description resid="WordChoice.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="WordChoice.Icon.16"/>
+                    <bt:Image size="32" resid="WordChoice.Icon.32"/>
+                    <bt:Image size="80" resid="WordChoice.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>runWordChoice</FunctionName>
@@ -92,9 +92,9 @@
               <Group id="WordAI.RewriteGroup">
                 <Label resid="Rewrite.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="Rewrite.Icon.16"/>
+                  <bt:Image size="32" resid="Rewrite.Icon.32"/>
+                  <bt:Image size="80" resid="Rewrite.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.Rewrite">
                   <Label resid="Rewrite.Label"/>
@@ -103,9 +103,9 @@
                     <Description resid="Rewrite.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="Rewrite.Icon.16"/>
+                    <bt:Image size="32" resid="Rewrite.Icon.32"/>
+                    <bt:Image size="80" resid="Rewrite.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>runRewrite</FunctionName>
@@ -115,9 +115,9 @@
               <Group id="WordAI.FormulaGroup">
                 <Label resid="Formula.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="Formula.Icon.16"/>
+                  <bt:Image size="32" resid="Formula.Icon.32"/>
+                  <bt:Image size="80" resid="Formula.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.Formula">
                   <Label resid="Formula.Label"/>
@@ -126,9 +126,9 @@
                     <Description resid="Formula.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="Formula.Icon.16"/>
+                    <bt:Image size="32" resid="Formula.Icon.32"/>
+                    <bt:Image size="80" resid="Formula.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>runFormula</FunctionName>
@@ -138,9 +138,9 @@
               <Group id="WordAI.AgentGroup">
                 <Label resid="Agent.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="Agent.Icon.16"/>
+                  <bt:Image size="32" resid="Agent.Icon.32"/>
+                  <bt:Image size="80" resid="Agent.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.Agent">
                   <Label resid="Agent.Label"/>
@@ -149,9 +149,9 @@
                     <Description resid="Agent.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="Agent.Icon.16"/>
+                    <bt:Image size="32" resid="Agent.Icon.32"/>
+                    <bt:Image size="80" resid="Agent.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ShowTaskpane">
                     <TaskpaneId>WordAI.Taskpane</TaskpaneId>
@@ -162,9 +162,9 @@
               <Group id="WordAI.SkillsGroup">
                 <Label resid="Skills.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="Skills.Icon.16"/>
+                  <bt:Image size="32" resid="Skills.Icon.32"/>
+                  <bt:Image size="80" resid="Skills.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.Skills">
                   <Label resid="Skills.Label"/>
@@ -173,9 +173,9 @@
                     <Description resid="Skills.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="Skills.Icon.16"/>
+                    <bt:Image size="32" resid="Skills.Icon.32"/>
+                    <bt:Image size="80" resid="Skills.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>openSkills</FunctionName>
@@ -185,9 +185,9 @@
               <Group id="WordAI.SettingsGroup">
                 <Label resid="Settings.Label"/>
                 <Icon>
-                  <bt:Image size="16" resid="Icon.16"/>
-                  <bt:Image size="32" resid="Icon.32"/>
-                  <bt:Image size="80" resid="Icon.80"/>
+                  <bt:Image size="16" resid="Settings.Icon.16"/>
+                  <bt:Image size="32" resid="Settings.Icon.32"/>
+                  <bt:Image size="80" resid="Settings.Icon.80"/>
                 </Icon>
                 <Control xsi:type="Button" id="WordAI.Settings">
                   <Label resid="Settings.Label"/>
@@ -196,9 +196,9 @@
                     <Description resid="Settings.Tooltip"/>
                   </Supertip>
                   <Icon>
-                    <bt:Image size="16" resid="Icon.16"/>
-                    <bt:Image size="32" resid="Icon.32"/>
-                    <bt:Image size="80" resid="Icon.80"/>
+                    <bt:Image size="16" resid="Settings.Icon.16"/>
+                    <bt:Image size="32" resid="Settings.Icon.32"/>
+                    <bt:Image size="80" resid="Settings.Icon.80"/>
                   </Icon>
                   <Action xsi:type="ExecuteFunction">
                     <FunctionName>openSettings</FunctionName>
@@ -216,6 +216,27 @@
         <bt:Image id="Icon.16" DefaultValue="https://localhost:3443/assets/icon-16.png"/>
         <bt:Image id="Icon.32" DefaultValue="https://localhost:3443/assets/icon-32.png"/>
         <bt:Image id="Icon.80" DefaultValue="https://localhost:3443/assets/icon-80.png"/>
+        <bt:Image id="Syntax.Icon.16" DefaultValue="https://localhost:3443/assets/grammar-16.png"/>
+        <bt:Image id="Syntax.Icon.32" DefaultValue="https://localhost:3443/assets/grammar-32.png"/>
+        <bt:Image id="Syntax.Icon.80" DefaultValue="https://localhost:3443/assets/grammar-80.png"/>
+        <bt:Image id="WordChoice.Icon.16" DefaultValue="https://localhost:3443/assets/word_choice-16.png"/>
+        <bt:Image id="WordChoice.Icon.32" DefaultValue="https://localhost:3443/assets/word_choice-32.png"/>
+        <bt:Image id="WordChoice.Icon.80" DefaultValue="https://localhost:3443/assets/word_choice-80.png"/>
+        <bt:Image id="Rewrite.Icon.16" DefaultValue="https://localhost:3443/assets/rewrite-16.png"/>
+        <bt:Image id="Rewrite.Icon.32" DefaultValue="https://localhost:3443/assets/rewrite-32.png"/>
+        <bt:Image id="Rewrite.Icon.80" DefaultValue="https://localhost:3443/assets/rewrite-80.png"/>
+        <bt:Image id="Formula.Icon.16" DefaultValue="https://localhost:3443/assets/formula-16.png"/>
+        <bt:Image id="Formula.Icon.32" DefaultValue="https://localhost:3443/assets/formula-32.png"/>
+        <bt:Image id="Formula.Icon.80" DefaultValue="https://localhost:3443/assets/formula-80.png"/>
+        <bt:Image id="Agent.Icon.16" DefaultValue="https://localhost:3443/assets/agent-16.png"/>
+        <bt:Image id="Agent.Icon.32" DefaultValue="https://localhost:3443/assets/agent-32.png"/>
+        <bt:Image id="Agent.Icon.80" DefaultValue="https://localhost:3443/assets/agent-80.png"/>
+        <bt:Image id="Skills.Icon.16" DefaultValue="https://localhost:3443/assets/skill-16.png"/>
+        <bt:Image id="Skills.Icon.32" DefaultValue="https://localhost:3443/assets/skill-32.png"/>
+        <bt:Image id="Skills.Icon.80" DefaultValue="https://localhost:3443/assets/skill-80.png"/>
+        <bt:Image id="Settings.Icon.16" DefaultValue="https://localhost:3443/assets/setting-16.png"/>
+        <bt:Image id="Settings.Icon.32" DefaultValue="https://localhost:3443/assets/setting-32.png"/>
+        <bt:Image id="Settings.Icon.80" DefaultValue="https://localhost:3443/assets/setting-80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3443/commands.html"/>

@@ -60,6 +60,7 @@
       settingsTitle: "Settings",
       settingsSubtitle: "Adjust the interface, memory, and model configuration.",
       statusIdle: "Unsaved",
+      statusSaving: "Saving",
       statusSaved: "Saved",
       statusWarning: "Check settings",
       languageLabel: "Language",
@@ -91,6 +92,7 @@
       providerPresetHint: "Choosing a preset fills in a recommended base URL. You can still edit every field manually.",
       saveButton: "Save settings",
       checkButton: "Check connection",
+      saveInProgress: "Saving settings...",
       saveSuccess: "Settings saved.",
       saveFailure: "Settings were not fully saved.",
       checkSuccess: "Backend connection looks good.",
@@ -101,6 +103,7 @@
       settingsTitle: "设置",
       settingsSubtitle: "调整界面、记忆与模型配置。",
       statusIdle: "未保存",
+      statusSaving: "保存中",
       statusSaved: "已保存",
       statusWarning: "请检查设置",
       languageLabel: "界面语言",
@@ -125,6 +128,7 @@
       providerPresetHint: "选择预设会自动填充推荐的 base URL，你仍然可以继续手动修改所有字段。",
       saveButton: "保存设置",
       checkButton: "检查连接",
+      saveInProgress: "正在保存设置...",
       saveSuccess: "设置已保存。",
       saveFailure: "设置未能完整保存。",
       checkSuccess: "后端连接正常。",
@@ -137,6 +141,7 @@
     settingsTitle: "设置",
     settingsSubtitle: "调整界面、记忆与模型配置。",
     statusIdle: "未保存",
+    statusSaving: "保存中",
     statusSaved: "已保存",
     statusWarning: "请检查设置",
     languageLabel: "界面语言",
@@ -167,6 +172,7 @@
     providerPresetHint: "选择预设会自动填入推荐的 base URL；你仍然可以继续手动修改所有字段。",
     saveButton: "保存设置",
     checkButton: "检查连接",
+    saveInProgress: "正在保存设置...",
     saveSuccess: "设置已保存。",
     saveFailure: "设置未能完整保存。",
     checkSuccess: "后端连接正常。",
@@ -202,12 +208,15 @@
   }
 
   function localSettingsFromForm() {
+    const apiBase = (elements.apiBase.value.trim() || shared.getRuntimeConfig().apiBase).replace(/\/+$/, "");
+    const runtimeApiBase = (shared.getRuntimeConfig().apiBase || "").replace(/\/+$/, "");
     return {
       language: elements.language.value,
       languageExplicit: true,
       fontSize: Number.parseInt(elements.fontSize.value, 10) || 14,
       historyContextChars: Number.parseInt(elements.historyContextChars.value, 10) || 0,
-      apiBase: elements.apiBase.value.trim() || "http://127.0.0.1:8000",
+      apiBase,
+      apiBaseExplicit: apiBase !== runtimeApiBase,
       autoApply: elements.autoApply.checked,
       showDetails: elements.showDetails.checked,
       showUndoReview: elements.showUndoReview.checked,
@@ -302,8 +311,29 @@
     elements.openaiUseJsonMode.checked = Boolean(preset.use_json_mode);
   }
 
-  async function requestJson(url, init) {
-    const response = await fetch(url, init);
+  async function requestJson(url, init, timeoutMs) {
+    const controller = "AbortController" in window ? new AbortController() : null;
+    const timeout = controller
+      ? window.setTimeout(() => controller.abort(), timeoutMs || 10000)
+      : null;
+
+    let response;
+    try {
+      response = await fetch(url, {
+        ...(init || {}),
+        signal: controller ? controller.signal : undefined,
+      });
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        throw new Error("Request timed out. Make sure Word AI is running.");
+      }
+      throw error;
+    } finally {
+      if (timeout) {
+        window.clearTimeout(timeout);
+      }
+    }
+
     if (!response.ok) {
       let detail = response.statusText;
       try {
@@ -326,20 +356,27 @@
   async function saveAll() {
     const localSettings = shared.saveSettings(localSettingsFromForm());
     applyLanguage(localSettings.language);
+    notifyTaskpane();
+    setStatus("saving", t(localSettings.language, "statusSaving"));
+    setMessage(t(localSettings.language, "saveInProgress"), "");
+    elements.saveButton.disabled = true;
+    elements.checkButton.disabled = true;
 
     try {
       const config = await requestJson(`${localSettings.apiBase}/settings/ai-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(remoteSettingsFromForm()),
-      });
+      }, 10000);
       fillRemoteSettings(config);
       setStatus("saved", t(localSettings.language, "statusSaved"));
       setMessage(t(localSettings.language, "saveSuccess"), "success");
-      notifyTaskpane();
     } catch (error) {
       setStatus("warning", t(localSettings.language, "statusWarning"));
       setMessage(`${t(localSettings.language, "saveFailure")} ${error.message}`, "error");
+    } finally {
+      elements.saveButton.disabled = false;
+      elements.checkButton.disabled = false;
     }
   }
 
@@ -353,13 +390,20 @@
 
   async function checkConnection() {
     const settings = shared.saveSettings(localSettingsFromForm());
+    setStatus("saving", t(settings.language, "statusSaving"));
+    setMessage(t(settings.language, "saveInProgress"), "");
+    elements.saveButton.disabled = true;
+    elements.checkButton.disabled = true;
     try {
-      await requestJson(`${settings.apiBase}/health`);
+      await requestJson(`${settings.apiBase}/health`, undefined, 8000);
       setStatus("saved", t(settings.language, "statusSaved"));
       setMessage(t(settings.language, "checkSuccess"), "success");
     } catch (error) {
       setStatus("warning", t(settings.language, "statusWarning"));
       setMessage(`${t(settings.language, "checkFailure")} ${error.message}`, "error");
+    } finally {
+      elements.saveButton.disabled = false;
+      elements.checkButton.disabled = false;
     }
   }
 
@@ -382,6 +426,9 @@
   }
 
   async function initialize() {
+    if (shared.loadRuntimeConfig) {
+      await shared.loadRuntimeConfig();
+    }
     const settings = shared.loadSettings();
     fillLocalSettings(settings);
     applyLanguage(settings.language);

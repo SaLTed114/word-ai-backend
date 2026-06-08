@@ -28,6 +28,7 @@
   };
 
   const channel = "BroadcastChannel" in window ? new BroadcastChannel("word-ai") : null;
+  let runtimeConfigPromise = null;
 
   const copy = {
     en: {
@@ -215,6 +216,7 @@
   }
 
   async function requestJson(path, init) {
+    await ensureRuntimeConfig();
     const response = await fetch(`${apiBase()}${path}`, init);
     const contentType = response.headers.get("content-type") || "";
     const data = contentType.includes("application/json")
@@ -225,6 +227,13 @@
       throw new Error(detail);
     }
     return data;
+  }
+
+  async function ensureRuntimeConfig() {
+    if (shared && shared.loadRuntimeConfig) {
+      runtimeConfigPromise = runtimeConfigPromise || shared.loadRuntimeConfig();
+      await runtimeConfigPromise;
+    }
   }
 
   async function getWordPayload() {
@@ -1218,6 +1227,7 @@
   async function checkHealth() {
     setHealthClass("", "Backend status");
     try {
+      await ensureRuntimeConfig();
       const response = await fetch(`${apiBase()}/health`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -1314,12 +1324,17 @@
     checkHealth();
   }
 
-  applySettings();
-  bindEvents();
+  async function initialize() {
+    await ensureRuntimeConfig();
+    applySettings();
+    bindEvents();
 
-  if (typeof Office !== "undefined" && Office.onReady) {
-    initializeOffice();
-  } else {
-    initializeWebFallback();
+    if (typeof Office !== "undefined" && Office.onReady) {
+      initializeOffice();
+    } else {
+      initializeWebFallback();
+    }
   }
+
+  initialize();
 })();

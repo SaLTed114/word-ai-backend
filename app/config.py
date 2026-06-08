@@ -16,12 +16,11 @@ def _get_base_dir() -> Path:
 
 def _get_data_dir() -> Path:
     """Get the writable data directory (DB, .env overrides, etc.)."""
-    if getattr(sys, "frozen", False):
-        # Check env var first
-        env_dir = os.environ.get("WORD_AI_DATA_DIR", "")
-        if env_dir.strip():
-            return Path(env_dir.strip())
+    env_dir = os.environ.get("WORD_AI_DATA_DIR", "")
+    if env_dir.strip():
+        return Path(env_dir.strip())
 
+    if getattr(sys, "frozen", False):
         # Check Windows registry (set by installer)
         try:
             import winreg
@@ -104,6 +103,7 @@ def read_env_values(path: Path | None = None) -> dict[str, str]:
 
 def update_env_values(updates: Mapping[str, str], path: Path | None = None) -> None:
     env_path = path or ENV_PATH
+    env_path.parent.mkdir(parents=True, exist_ok=True)
     lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
     remaining = dict(updates)
     output: list[str] = []

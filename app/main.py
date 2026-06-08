@@ -108,15 +108,21 @@ async def get_ai_config() -> AIConfigView:
 
 @app.put("/settings/ai-config", response_model=AIConfigView)
 async def update_ai_config(request: AIConfigUpdate) -> AIConfigView:
-    settings = save_ai_settings(
-        api_key=request.api_key,
-        model=request.model,
-        base_url=request.base_url,
-        api_endpoint=request.api_endpoint,
-        proxy_url=request.proxy_url,
-        trust_env=request.trust_env,
-        use_json_mode=request.use_json_mode,
-    )
+    try:
+        settings = save_ai_settings(
+            api_key=request.api_key,
+            model=request.model,
+            base_url=request.base_url,
+            api_endpoint=request.api_endpoint,
+            proxy_url=request.proxy_url,
+            trust_env=request.trust_env,
+            use_json_mode=request.use_json_mode,
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not save settings to disk: {exc}",
+        ) from exc
     app.state.settings = settings
     app.state.ai_client = AIClient(settings) if settings.is_ready() else None
     return AIConfigView(**settings.editable())
